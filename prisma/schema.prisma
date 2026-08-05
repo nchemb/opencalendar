@@ -1,0 +1,149 @@
+// BookKit — self-hostable booking tool.
+// All times are stored in UTC. Timezones exist only at the display layer.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Host {
+  id String @id @default(cuid())
+
+  email    String @unique
+  timezone String @default("America/Chicago")
+
+  // Google Calendar OAuth
+  googleRefreshToken   String?
+  googleAccessToken    String?
+  googleTokenExpiresAt DateTime?
+  googleCalendarId     String    @default("primary")
+  googleConnectedAt    DateTime?
+  googleAuthError      String? // set when the refresh token is rejected; cleared on reconnect
+
+  // Branding shown on public booking pages
+  displayName String?
+  avatarUrl   String?
+
+  meetingTypes MeetingType[]
+  bookings     Booking[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum DisplayMode {
+  popup
+  inline
+}
+
+model MeetingType {
+  id     String @id @default(cuid())
+  hostId String
+  host   Host   @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  slug        String  @unique
+  name        String
+  description String?
+
+  durationMinutes Int    @default(30)
+  priceCents      Int? // null => free
+  currency        String @default("usd")
+  color           String @default("#FF6A00")
+
+  // Weekly availability, host-local wall-clock time.
+  // Shape: { "0".."6": [{ "start": "09:00", "end": "17:00" }, ...] }  (0 = Sunday)
+  weeklyHours Json
+
+  daysInAdvance  Int  @default(30)
+  minNoticeHours Int  @default(12)
+  bufferMinutes  Int  @default(0)
+  dailyLimit     Int?
+
+  customQuestion String?
+  redirectUrl    String?
+
+  displayMode DisplayMode @default(popup)
+  active      Boolean     @default(true)
+
+  bookings Booking[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
+}
+
+enum BookingStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  EXPIRED
+  CANCELLED
+  FAILED_NEEDS_INTERVENTION
+}
+
+model Booking {
+  id String @id @default(cuid())
+
+  hostId        String
+  host          Host        @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  meetingTypeId String
+  meetingType   MeetingType @relation(fields: [meetingTypeId], references: [id])
+
+  name         String
+  email        String
+  timezone     String // booker's IANA zone — display only, never used in overlap math
+  customAnswer String?
+
+  // ALWAYS UTC
+  startTime DateTime
+  endTime   DateTime
+
+  status BookingStatus
+
+  // Stripe
+  stripeSessionId       String?   @unique
+  stripePaymentIntentId String?
+  stripePaymentStatus   String? // "unpaid" | "paid" | "refunded"
+  stripePaidAt          DateTime?
+  amountCents           Int?
+  webhookProcessedAt    DateTime?
+
+  // Google Calendar
+  googleEventId     String?   @unique
+  googleEventAt     DateTime?
+  googleSyncError   String?
+  meetLink          String?
+  retryCount        Int       @default(0)
+  lastRetryAt       DateTime?
+
+  // Side effects
+  confirmationEmailSentAt DateTime?
+  confirmationEmailError  String?
+  webhookDeliveredAt      DateTime?
+
+  cancelToken String    @unique @default(cuid())
+  cancelledAt DateTime?
+  expiresAt   DateTime? // pending-payment hold expiry
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Overlap safety comes from the serialized booking transaction (see lib/booking.ts).
+  // A partial unique index on (hostId, startTime, endTime) for live statuses is added
+  // in the migration — a plain @@unique would permanently burn a slot after a cancellation.
+  @@index([hostId, status, startTime, endTime])
+  @@index([status, expiresAt])
+  @@index([meetingTypeId, startTime])
+  @@index([email])
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

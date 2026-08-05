@@ -1,0 +1,21 @@
+node_modules
+.next
+out
+build
+.DS_Store
+*.pem
+
+# env
+.env
+.env*.local
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# prisma
+prisma/*.db

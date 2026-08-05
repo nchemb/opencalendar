@@ -1,0 +1,187 @@
+@import "tailwindcss";
+
+/* ---- Theme tokens. Dark by default; [data-theme="light"] flips them. ---- */
+:root {
+  --bk-accent: #ff6a00;
+  --bk-accent-ink: #0b0b0c;
+  --bk-bg: #0b0b0c;
+  --bk-surface: #141416;
+  --bk-surface-2: #1b1b1f;
+  --bk-fg: #f2f2f4;
+  --bk-muted: #9a9aa3;
+  --bk-border: #2a2a30;
+  --bk-danger: #ff5c5c;
+  --bk-ok: #3ddc84;
+}
+
+[data-theme="light"] {
+  --bk-accent-ink: #ffffff;
+  --bk-bg: #ffffff;
+  --bk-surface: #ffffff;
+  --bk-surface-2: #f6f6f7;
+  --bk-fg: #14141a;
+  --bk-muted: #6b6b76;
+  --bk-border: #e3e3e8;
+  --bk-danger: #d02f2f;
+  --bk-ok: #148f4b;
+}
+
+@theme inline {
+  --color-bk-accent: var(--bk-accent);
+  --color-bk-bg: var(--bk-bg);
+  --color-bk-surface: var(--bk-surface);
+  --color-bk-surface-2: var(--bk-surface-2);
+  --color-bk-fg: var(--bk-fg);
+  --color-bk-muted: var(--bk-muted);
+  --color-bk-border: var(--bk-border);
+  --color-bk-danger: var(--bk-danger);
+  --color-bk-ok: var(--bk-ok);
+}
+
+html,
+body {
+  background: var(--bk-bg);
+  color: var(--bk-fg);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+.bk-embed body,
+body.bk-embed {
+  background: transparent;
+}
+
+/* ---- Primitives ---- */
+.bk-card {
+  background: var(--bk-surface);
+  border: 1px solid var(--bk-border);
+  border-radius: 16px;
+}
+
+.bk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 15px;
+  padding: 11px 18px;
+  transition: filter .15s ease, transform .05s ease, background .15s ease;
+}
+.bk-btn:active { transform: translateY(1px); }
+.bk-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.bk-btn-primary {
+  background: var(--bk-accent);
+  color: var(--bk-accent-ink);
+}
+.bk-btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+
+.bk-btn-ghost {
+  background: transparent;
+  color: var(--bk-fg);
+  border: 1px solid var(--bk-border);
+}
+.bk-btn-ghost:hover:not(:disabled) { background: var(--bk-surface-2); }
+
+.bk-input {
+  width: 100%;
+  background: var(--bk-surface-2);
+  border: 1px solid var(--bk-border);
+  border-radius: 10px;
+  padding: 11px 13px;
+  font-size: 15px;
+  color: var(--bk-fg);
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.bk-input::placeholder { color: var(--bk-muted); }
+.bk-input:focus {
+  border-color: var(--bk-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bk-accent) 22%, transparent);
+}
+
+.bk-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--bk-muted);
+  margin-bottom: 6px;
+}
+
+/* ---- Calendar grid ---- */
+.bk-day {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  transition: background .12s ease, color .12s ease, box-shadow .12s ease;
+}
+.bk-day-open {
+  background: color-mix(in srgb, var(--bk-accent) 14%, transparent);
+  color: var(--bk-fg);
+  cursor: pointer;
+}
+.bk-day-open:hover {
+  background: color-mix(in srgb, var(--bk-accent) 26%, transparent);
+}
+.bk-day-selected {
+  background: var(--bk-accent);
+  color: var(--bk-accent-ink);
+}
+.bk-day-selected:hover { background: var(--bk-accent); }
+.bk-day-closed { color: var(--bk-muted); opacity: .38; }
+
+.bk-slot {
+  width: 100%;
+  border: 1px solid var(--bk-border);
+  background: var(--bk-surface-2);
+  border-radius: 10px;
+  padding: 11px 12px;
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  transition: border-color .12s ease, background .12s ease;
+}
+.bk-slot:hover {
+  border-color: var(--bk-accent);
+  background: color-mix(in srgb, var(--bk-accent) 12%, transparent);
+}
+.bk-slot-active {
+  background: var(--bk-accent);
+  border-color: var(--bk-accent);
+  color: var(--bk-accent-ink);
+}
+
+.bk-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bk-border) transparent;
+}
+.bk-scroll::-webkit-scrollbar { width: 8px; }
+.bk-scroll::-webkit-scrollbar-thumb {
+  background: var(--bk-border);
+  border-radius: 999px;
+}
+
+@keyframes bk-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.bk-fade { animation: bk-fade-up .22s ease both; }
+
+@keyframes bk-spin { to { transform: rotate(360deg); } }
+.bk-spin { animation: bk-spin .8s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bk-fade, .bk-spin { animation: none; }
+}
