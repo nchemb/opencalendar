@@ -82,7 +82,8 @@ async function withHostLock<T>(hostId: string, fn: (tx: TxClient) => Promise<T>)
     try {
       return await prisma.$transaction(
         async (tx) => {
-          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${hostId}))`;
+          // ::text cast because Prisma cannot deserialize the bare void return.
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${hostId}))::text`;
           return fn(tx as TxClient);
         },
         {
