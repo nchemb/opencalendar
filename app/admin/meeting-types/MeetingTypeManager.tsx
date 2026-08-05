@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { DAY_LABELS, DEFAULT_WEEKLY_HOURS, type WeeklyHours } from "@/lib/types";
+import { DAY_LABELS, DEFAULT_WEEKLY_HOURS, MAX_QUESTIONS, type BookingQuestion, type WeeklyHours } from "@/lib/types";
 import SharePanel from "./SharePanel";
 
 export type EditableMeetingType = {
@@ -18,7 +18,7 @@ export type EditableMeetingType = {
   minNoticeHours: number;
   bufferMinutes: number;
   dailyLimit: number | null;
-  customQuestion: string;
+  questions: BookingQuestion[];
   redirectUrl: string;
   displayMode: "popup" | "inline";
   active: boolean;
@@ -38,7 +38,7 @@ const BLANK: EditableMeetingType = {
   minNoticeHours: 12,
   bufferMinutes: 0,
   dailyLimit: null,
-  customQuestion: "",
+  questions: [],
   redirectUrl: "",
   displayMode: "popup",
   active: true,
@@ -199,7 +199,6 @@ function Editor({ value, onClose }: { value: EditableMeetingType; onClose: () =>
           body: JSON.stringify({
             ...form,
             description: form.description || null,
-            customQuestion: form.customQuestion || null,
             redirectUrl: form.redirectUrl || null,
           }),
         }
@@ -356,14 +355,56 @@ function Editor({ value, onClose }: { value: EditableMeetingType; onClose: () =>
             />
           </Field>
 
-          <Field label="Custom question (optional)">
-            <input
-              className="bk-input"
-              value={form.customQuestion}
-              onChange={(e) => set("customQuestion", e.target.value)}
-              placeholder="What do you want to get out of this call?"
-            />
-          </Field>
+          <div className="sm:col-span-2">
+            <p className="bk-label">Booking form questions (asked after name + email)</p>
+            <div className="space-y-2">
+              {form.questions.map((q, i) => (
+                <div key={i} className="flex flex-wrap items-center gap-2">
+                  <input
+                    className="bk-input flex-1 min-w-[220px]"
+                    value={q.label}
+                    maxLength={200}
+                    placeholder="What do you want to get out of this call?"
+                    onChange={(e) =>
+                      set(
+                        "questions",
+                        form.questions.map((x, j) => (j === i ? { ...x, label: e.target.value } : x))
+                      )
+                    }
+                  />
+                  <label className="flex items-center gap-1.5 text-sm text-[var(--bk-muted)]">
+                    <input
+                      type="checkbox"
+                      checked={q.required}
+                      onChange={(e) =>
+                        set(
+                          "questions",
+                          form.questions.map((x, j) => (j === i ? { ...x, required: e.target.checked } : x))
+                        )
+                      }
+                    />
+                    required
+                  </label>
+                  <button
+                    type="button"
+                    className="text-xs text-[var(--bk-muted)] hover:text-[var(--bk-fg)]"
+                    onClick={() => set("questions", form.questions.filter((_, j) => j !== i))}
+                  >
+                    remove
+                  </button>
+                </div>
+              ))}
+              {form.questions.length < MAX_QUESTIONS && (
+                <button
+                  type="button"
+                  className="text-xs underline text-[var(--bk-muted)]"
+                  onClick={() => set("questions", [...form.questions, { label: "", required: false }])}
+                >
+                  + add question
+                </button>
+              )}
+            </div>
+          </div>
           <Field label="Redirect after booking (optional)">
             <input
               className="bk-input"

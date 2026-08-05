@@ -158,6 +158,9 @@ export type BookingInput = {
   name: string;
   email: string;
   timezone: string;
+  /** Structured Q&A pairs (already validated against the meeting type). */
+  answers?: { label: string; answer: string }[];
+  /** Display string of the answers, stored alongside for easy rendering. */
   customAnswer?: string | null;
   startTime: Date;
 };
@@ -210,6 +213,7 @@ async function reserveSlot(
           email: input.email,
           timezone: input.timezone,
           customAnswer: input.customAnswer ?? null,
+          answers: input.answers?.length ? input.answers : undefined,
           startTime,
           endTime,
           status: "PENDING_PAYMENT",
@@ -303,8 +307,8 @@ function buildEventDescription(booking: Booking, meetingType: MeetingType): stri
     `Email: ${booking.email}`,
     `Their timezone: ${booking.timezone}`,
   ];
-  if (meetingType.customQuestion && booking.customAnswer) {
-    lines.push("", meetingType.customQuestion, booking.customAnswer);
+  if (booking.customAnswer) {
+    lines.push("", booking.customAnswer);
   }
   if (booking.amountCents) {
     lines.push("", `Paid: ${formatPrice(booking.amountCents, meetingType.currency)}`);

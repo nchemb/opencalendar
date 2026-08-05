@@ -86,7 +86,7 @@ export default function BookingFlow({
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [answer, setAnswer] = useState("");
+  const [answers, setAnswers] = useState<string[]>([]);
   const [company, setCompany] = useState(""); // honeypot
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -267,7 +267,7 @@ export default function BookingFlow({
       name,
       email,
       timezone,
-      customAnswer: answer || null,
+      answers,
       startTime: selectedSlot,
       company,
       elapsedMs: Date.now() - mountedAt.current,
@@ -513,18 +513,28 @@ export default function BookingFlow({
               autoComplete="email"
             />
           </div>
-          {meetingType.customQuestion && (
-            <div>
-              <label className="bk-label" htmlFor="bk-answer">{meetingType.customQuestion}</label>
+          {meetingType.questions.map((q, i) => (
+            <div key={i}>
+              <label className="bk-label" htmlFor={`bk-answer-${i}`}>
+                {q.label}
+                {!q.required && <span className="opacity-60"> (optional)</span>}
+              </label>
               <textarea
-                id="bk-answer"
-                className="bk-input resize-y min-h-[84px]"
-                value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
+                id={`bk-answer-${i}`}
+                className="bk-input resize-y min-h-[72px]"
+                value={answers[i] ?? ""}
+                onChange={(e) =>
+                  setAnswers((prev) => {
+                    const next = [...prev];
+                    next[i] = e.target.value;
+                    return next;
+                  })
+                }
+                required={q.required}
                 maxLength={2000}
               />
             </div>
-          )}
+          ))}
 
           <input
             type="text"

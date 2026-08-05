@@ -1,4 +1,4 @@
-import { parseWeeklyHours, type WeeklyHours } from "./types";
+import { MAX_QUESTIONS, parseQuestions, parseWeeklyHours, type BookingQuestion, type WeeklyHours } from "./types";
 import { cleanString, isSlug, isValidTimezone } from "./validate";
 
 export type MeetingTypeFields = {
@@ -14,7 +14,9 @@ export type MeetingTypeFields = {
   minNoticeHours: number;
   bufferMinutes: number;
   dailyLimit: number | null;
-  customQuestion: string | null;
+  questions: BookingQuestion[];
+  /** Always cleared on save — superseded by questions; prevents the legacy fallback resurrecting. */
+  customQuestion: null;
   redirectUrl: string | null;
   displayMode: "popup" | "inline";
   active: boolean;
@@ -86,7 +88,8 @@ export function parseMeetingTypeInput(body: Record<string, unknown>): MeetingTyp
     minNoticeHours: int(body.minNoticeHours, 12, 0, 720),
     bufferMinutes: int(body.bufferMinutes, 0, 0, 240),
     dailyLimit,
-    customQuestion: cleanString(body.customQuestion, 200),
+    questions: parseQuestions(body.questions).slice(0, MAX_QUESTIONS),
+    customQuestion: null,
     redirectUrl: optionalUrl(body.redirectUrl),
     displayMode,
     active: body.active !== false,

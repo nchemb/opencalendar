@@ -56,6 +56,24 @@ export function toMinutes(hhmm: string): number {
   return h * 60 + m;
 }
 
+/** A custom form field the host asks bookers to fill in. */
+export type BookingQuestion = { label: string; required: boolean };
+
+export const MAX_QUESTIONS = 5;
+
+export function parseQuestions(value: unknown): BookingQuestion[] {
+  if (!Array.isArray(value)) return [];
+  const out: BookingQuestion[] = [];
+  for (const q of value) {
+    if (!q || typeof q !== "object") continue;
+    const label = typeof (q as BookingQuestion).label === "string" ? (q as BookingQuestion).label.trim() : "";
+    if (!label) continue;
+    out.push({ label: label.slice(0, 200), required: (q as BookingQuestion).required === true });
+    if (out.length >= MAX_QUESTIONS) break;
+  }
+  return out;
+}
+
 export type PublicMeetingType = {
   slug: string;
   name: string;
@@ -64,7 +82,7 @@ export type PublicMeetingType = {
   priceCents: number | null;
   currency: string;
   color: string;
-  customQuestion: string | null;
+  questions: BookingQuestion[];
   displayMode: "popup" | "inline";
   hostName: string;
   hostTimezone: string;

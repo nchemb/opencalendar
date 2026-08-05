@@ -32,6 +32,36 @@ export function parseInstant(value: unknown): Date | null {
   return js;
 }
 
+export type AnsweredQuestion = { label: string; answer: string };
+
+/**
+ * Zips submitted answers with the meeting type's questions, enforcing required
+ * fields server-side. Returns the structured pairs plus a display string.
+ */
+export function parseAnswers(
+  raw: unknown,
+  questions: { label: string; required: boolean }[]
+):
+  | { ok: true; answers: AnsweredQuestion[]; display: string | null }
+  | { ok: false; error: string } {
+  const list = Array.isArray(raw) ? raw : [];
+
+  const answers: AnsweredQuestion[] = [];
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    const value = typeof list[i] === "string" ? (list[i] as string).trim().slice(0, 2000) : "";
+    if (q.required && !value) {
+      return { ok: false, error: `Please answer: ${q.label}` };
+    }
+    if (value) answers.push({ label: q.label, answer: value });
+  }
+
+  const display = answers.length
+    ? answers.map((a) => `${a.label}\n${a.answer}`).join("\n\n")
+    : null;
+  return { ok: true, answers, display };
+}
+
 /** Honeypot + minimum fill time — cheap bot filter on public forms. */
 export function looksLikeBot(body: Record<string, unknown>): boolean {
   if (cleanString(body.company, 100)) return true; // honeypot field

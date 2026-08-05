@@ -64,7 +64,9 @@ model MeetingType {
   bufferMinutes  Int  @default(0)
   dailyLimit     Int?
 
-  customQuestion String?
+  customQuestion String? // legacy single question — superseded by questions
+  // [{ "label": "What are you building?", "required": true }, ...] max 5
+  questions      Json?
   redirectUrl    String?
 
   displayMode DisplayMode @default(popup)
@@ -97,7 +99,9 @@ model Booking {
   name         String
   email        String
   timezone     String // booker's IANA zone — display only, never used in overlap math
-  customAnswer String?
+  customAnswer String? // display string of all answers (also legacy single answer)
+  // [{ "label": "...", "answer": "..." }, ...] aligned with meetingType.questions
+  answers      Json?
 
   // ALWAYS UTC
   startTime DateTime

@@ -6,9 +6,9 @@ import {
 } from "@/lib/booking";
 import { clientIp, fail, ok, readJson } from "@/lib/http";
 import { errorMessage, log } from "@/lib/logger";
-import { findActiveMeetingType, hostBookingBlocked } from "@/lib/meeting-types";
+import { findActiveMeetingType, hostBookingBlocked, toPublic } from "@/lib/meeting-types";
 import { rateLimit } from "@/lib/rate-limit";
-import { cleanString, isEmail, isSlug, isValidTimezone, looksLikeBot, parseInstant } from "@/lib/validate";
+import { cleanString, isEmail, isSlug, isValidTimezone, looksLikeBot, parseAnswers, parseInstant } from "@/lib/validate";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   const name = cleanString(body.name, 120);
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : null;
   const timezone = body.timezone;
-  const customAnswer = cleanString(body.customAnswer, 2000);
+  
   const startTime = parseInstant(body.startTime);
 
   if (!isSlug(slug)) return fail("Invalid meeting type.", 400, "BAD_SLUG");
@@ -57,12 +57,16 @@ export async function POST(req: Request) {
     );
   }
 
+  const parsedAnswers = parseAnswers(body.answers, toPublic(meetingType, host).questions);
+  if (!parsedAnswers.ok) return fail(parsedAnswers.error, 400, "MISSING_ANSWER");
+
   try {
     const booking = await createFreeBooking(host, meetingType, {
       name,
       email: email!,
       timezone: timezone as string,
-      customAnswer,
+      answers: parsedAnswers.answers,
+      customAnswer: parsedAnswers.display,
       startTime,
     });
 

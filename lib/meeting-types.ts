@@ -1,6 +1,6 @@
 import type { Host, MeetingType } from "@prisma/client";
 import { prisma } from "./db";
-import type { PublicMeetingType } from "./types";
+import { parseQuestions, type BookingQuestion, type PublicMeetingType } from "./types";
 
 export async function findActiveMeetingType(
   slug: string
@@ -14,6 +14,16 @@ export async function findActiveMeetingType(
   return { meetingType: rest as MeetingType, host };
 }
 
+/** Questions list, falling back to the legacy single customQuestion. */
+export function questionsOf(meetingType: MeetingType): BookingQuestion[] {
+  const parsed = parseQuestions(meetingType.questions);
+  if (parsed.length) return parsed;
+  if (meetingType.customQuestion?.trim()) {
+    return [{ label: meetingType.customQuestion.trim(), required: false }];
+  }
+  return [];
+}
+
 export function toPublic(meetingType: MeetingType, host: Host): PublicMeetingType {
   return {
     slug: meetingType.slug,
@@ -23,7 +33,7 @@ export function toPublic(meetingType: MeetingType, host: Host): PublicMeetingTyp
     priceCents: meetingType.priceCents,
     currency: meetingType.currency,
     color: meetingType.color,
-    customQuestion: meetingType.customQuestion,
+    questions: questionsOf(meetingType),
     displayMode: meetingType.displayMode,
     hostName: host.displayName || host.email,
     hostTimezone: host.timezone,

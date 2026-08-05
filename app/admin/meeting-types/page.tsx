@@ -2,6 +2,7 @@ import { appUrl } from "@/lib/env";
 import { prisma } from "@/lib/db";
 import { getHost } from "@/lib/booking";
 import { parseWeeklyHours } from "@/lib/types";
+import { questionsOf } from "@/lib/meeting-types";
 import MeetingTypeManager, { type EditableMeetingType } from "./MeetingTypeManager";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,7 @@ export default async function MeetingTypesPage() {
     minNoticeHours: m.minNoticeHours,
     bufferMinutes: m.bufferMinutes,
     dailyLimit: m.dailyLimit,
-    customQuestion: m.customQuestion ?? "",
+    questions: questionsOf(m),
     redirectUrl: m.redirectUrl ?? "",
     displayMode: m.displayMode,
     active: m.active,
