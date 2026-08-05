@@ -117,6 +117,7 @@ body.bk-embed {
 /* ---- Calendar grid ---- */
 .bk-day {
   aspect-ratio: 1 / 1;
+  max-height: 54px;
   display: flex;
   align-items: center;
   justify-content: center;

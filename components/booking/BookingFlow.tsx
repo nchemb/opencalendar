@@ -570,7 +570,7 @@ export default function BookingFlow({
   const daySlots = selectedDay ? slotsByDay.get(selectedDay) ?? [] : [];
 
   return (
-    <div ref={rootRef} style={accent} className="max-w-3xl mx-auto">
+    <div ref={rootRef} style={accent} className="max-w-3xl mx-auto @container">
       <div className="bk-card overflow-hidden">
         {chrome && (
           <div className="px-5 sm:px-7 pt-6 pb-5 border-b border-[var(--bk-border)]">
@@ -611,9 +611,11 @@ export default function BookingFlow({
           </div>
         )}
 
-        <div className="grid md:grid-cols-[1fr_230px]">
+        {/* Container query, not viewport: inside an embed iframe the viewport IS the
+            iframe, so the split must follow the widget's own width. */}
+        <div className="grid @xl:grid-cols-[1fr_220px]">
           {/* calendar */}
-          <div className="p-5 sm:p-6 md:border-r border-[var(--bk-border)]">
+          <div className="p-5 sm:p-6 @xl:border-r border-[var(--bk-border)]">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold">{monthStart.toFormat("LLLL yyyy")}</h2>
               <div className="flex gap-1">
@@ -726,7 +728,7 @@ export default function BookingFlow({
           </div>
 
           {/* slots */}
-          <div className="p-5 sm:p-6 border-t md:border-t-0 border-[var(--bk-border)]">
+          <div className="p-5 sm:p-6 border-t @xl:border-t-0 border-[var(--bk-border)]">
             <p className="text-sm font-semibold mb-3">
               {selectedDay
                 ? DateTime.fromFormat(selectedDay, "yyyy-MM-dd", { zone: timezone }).toFormat("cccc, LLL d")
