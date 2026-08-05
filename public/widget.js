@@ -42,18 +42,21 @@
       "backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px;" +
       "opacity:0;transition:opacity .18s ease}" +
       ".bookkit-overlay.is-open{opacity:1}" +
-      ".bookkit-modal{position:relative;width:100%;max-width:720px;height:min(88vh,740px);" +
-      "border-radius:16px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.5);" +
+      ".bookkit-modal{position:relative;width:100%;max-width:720px;max-height:min(88vh,780px);" +
+      "border-radius:16px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;" +
+      "box-shadow:0 24px 70px rgba(0,0,0,.5);background:#0b0b0c;" +
       "transform:translateY(8px);transition:transform .18s ease}" +
       ".bookkit-overlay.is-open .bookkit-modal{transform:none}" +
-      ".bookkit-modal iframe{width:100%;height:100%;border:0;display:block;background:transparent}" +
-      ".bookkit-close{position:absolute;top:10px;right:10px;width:32px;height:32px;border:0;" +
+      // The iframe grows to its content (via bookkit.resize) and the MODAL scrolls —
+      // nested iframe scrolling is a touch trap on mobile.
+      ".bookkit-modal iframe{width:100%;height:640px;border:0;display:block;background:transparent}" +
+      ".bookkit-close{position:sticky;top:10px;float:right;margin:10px 10px 0 0;width:32px;height:32px;border:0;z-index:2;" +
       "border-radius:999px;background:rgba(20,20,22,.9);color:#fff;font-size:19px;line-height:1;" +
       "cursor:pointer;display:flex;align-items:center;justify-content:center}" +
       ".bookkit-close:hover{background:rgba(40,40,44,.95)}" +
       ".bookkit-inline{width:100%;border:0;display:block;background:transparent;min-height:520px;" +
       "transition:height .15s ease}" +
-      "@media (max-width:640px){.bookkit-modal{height:92vh;max-width:100%}}";
+      "@media (max-width:640px){.bookkit-modal{max-height:94vh;max-width:100%}}";
     var el = document.createElement("style");
     el.id = STYLE_ID;
     el.appendChild(document.createTextNode(css));
@@ -190,7 +193,7 @@
     if (!data || typeof data.type !== "string" || data.type.indexOf("bookkit.") !== 0) return;
 
     if (data.type === "bookkit.resize") {
-      var frames = document.querySelectorAll("iframe.bookkit-inline");
+      var frames = document.querySelectorAll("iframe.bookkit-inline, .bookkit-modal iframe");
       for (var i = 0; i < frames.length; i++) {
         if (frames[i].contentWindow === event.source) {
           frames[i].style.height = Math.max(320, data.height) + "px";

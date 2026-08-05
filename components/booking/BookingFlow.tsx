@@ -737,7 +737,10 @@ export default function BookingFlow({
                 ? DateTime.fromFormat(selectedDay, "yyyy-MM-dd", { zone: timezone }).toFormat("cccc, LLL d")
                 : "Pick a day"}
             </p>
-            <div className="bk-scroll flex flex-col gap-2 max-h-[330px] overflow-y-auto pr-1">
+            {/* Side-by-side: slots scroll in their own column. Stacked (mobile):
+                flow full height so the page scrolls natively — an inner scrollbox
+                inside an embed iframe is a scroll trap on touch devices. */}
+            <div className="bk-scroll flex flex-col gap-2 @xl:max-h-[330px] @xl:overflow-y-auto @xl:pr-1">
               {daySlots.map((iso) => {
                 const t = DateTime.fromISO(iso, { zone: timezone });
                 return (

@@ -62,6 +62,14 @@ body.bk-embed {
   border-radius: 16px;
 }
 
+button,
+select,
+.bk-slot,
+.bk-day {
+  /* no double-tap zoom / 300ms delay on touch devices */
+  touch-action: manipulation;
+}
+
 .bk-btn {
   display: inline-flex;
   align-items: center;
