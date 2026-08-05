@@ -8,7 +8,7 @@ import { clientIp, fail, ok, readJson } from "@/lib/http";
 import { errorMessage, log } from "@/lib/logger";
 import { findActiveMeetingType, hostBookingBlocked, toPublic } from "@/lib/meeting-types";
 import { rateLimit } from "@/lib/rate-limit";
-import { stripeConfigured } from "@/lib/stripe";
+import { stripeConfigured, stripeKeyMismatch } from "@/lib/stripe";
 import { cleanString, isEmail, isSlug, isValidTimezone, looksLikeBot, parseAnswers, parseInstant } from "@/lib/validate";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +26,10 @@ export async function POST(req: Request) {
 
   if (!stripeConfigured()) {
     return fail("Payments are not configured on this instance.", 503, "STRIPE_NOT_CONFIGURED");
+  }
+  if (stripeKeyMismatch()) {
+    log.error("intent", "stripe_key_mismatch", { detail: stripeKeyMismatch() });
+    return fail("Payments are misconfigured on this instance (test/live key mismatch).", 503, "STRIPE_KEY_MISMATCH");
   }
 
   const body = await readJson<Record<string, unknown>>(req);

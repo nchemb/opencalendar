@@ -1,7 +1,7 @@
 import { getHost } from "@/lib/booking";
 import { appUrl, env, googleRedirectUri, hasGoogleOAuth, hasResend } from "@/lib/env";
 import { allSettings } from "@/lib/settings";
-import { stripeConfigured } from "@/lib/stripe";
+import { stripeConfigured, stripeKeyMismatch } from "@/lib/stripe";
 import SettingsForm from "./SettingsForm";
 
 export const dynamic = "force-dynamic";
@@ -87,9 +87,15 @@ export default async function SettingsPage({
           Webhook endpoint: <code className="break-all">{appUrl()}/api/stripe/webhook</code>
         </p>
         <p className="text-sm text-[var(--bk-muted)] mt-1">
-          Events needed: <code>checkout.session.completed</code>, <code>checkout.session.expired</code>
+          Events needed: <code>checkout.session.completed</code>, <code>checkout.session.expired</code>,{" "}
+          <code>payment_intent.succeeded</code>
           {env("STRIPE_WEBHOOK_SECRET") ? " — signing secret set." : " — signing secret MISSING."}
         </p>
+        {stripeKeyMismatch() && (
+          <p className="text-sm mt-2" style={{ color: "var(--bk-danger)" }}>
+            {stripeKeyMismatch()}
+          </p>
+        )}
       </section>
 
       <SettingsForm
