@@ -415,6 +415,90 @@ export async function startPaidCheckout(
 }
 
 /**
+ * Embedded-payment flow: reserve the hold, then hand back a PaymentIntent client
+ * secret so the card fields render inline on the booking page (no redirect).
+ */
+export async function startPaidIntent(
+  host: Host,
+  meetingType: MeetingType,
+  input: BookingInput
+): Promise<{ booking: Booking; clientSecret: string; expiresAt: string }> {
+  if (!meetingType.priceCents || meetingType.priceCents <= 0) {
+    throw new InvalidSlotError("This meeting type is free — no payment needed.");
+  }
+
+  const booking = await reserveSlot(
+    host,
+    meetingType,
+    input,
+    PAID_HOLD_MINUTES,
+    meetingType.priceCents
+  );
+
+  try {
+    const intent = await stripe().paymentIntents.create({
+      amount: meetingType.priceCents,
+      currency: meetingType.currency,
+      receipt_email: booking.email,
+      automatic_payment_methods: { enabled: true },
+      description: `${meetingType.name} — ${formatWhen(booking.startTime, booking.timezone)}`,
+      metadata: {
+        bookingId: booking.id,
+        meetingTypeSlug: meetingType.slug,
+        startTime: booking.startTime.toISOString(),
+      },
+    });
+
+    if (!intent.client_secret) throw new Error("Stripe returned no client secret");
+
+    const updated = await prisma.booking.update({
+      where: { id: booking.id },
+      data: { stripePaymentIntentId: intent.id, stripePaymentStatus: "unpaid" },
+    });
+
+    log.info("booking", "intent_started", { bookingId: booking.id, intentId: intent.id });
+    return {
+      booking: updated,
+      clientSecret: intent.client_secret,
+      expiresAt: booking.expiresAt!.toISOString(),
+    };
+  } catch (err) {
+    await prisma.booking
+      .update({ where: { id: booking.id }, data: { status: "EXPIRED", expiresAt: null } })
+      .catch(() => undefined);
+    log.error("booking", "intent_failed", { bookingId: booking.id, error: errorMessage(err) });
+    throw err;
+  }
+}
+
+/**
+ * Shared settlement once a payment has been atomically claimed: conflict check,
+ * then calendar confirmation. Both webhook shapes funnel through here.
+ */
+async function settleClaimedBooking(bookingId: string): Promise<void> {
+  const booking = await prisma.booking.findUniqueOrThrow({
+    where: { id: bookingId },
+    include: { meetingType: true, host: true },
+  });
+  const { meetingType, host, ...plain } = booking;
+
+  if (plain.status === "CONFIRMED" && plain.googleEventId) return;
+
+  // Payment landed — did anything steal the slot in the meantime?
+  const conflict = await findPostPaymentConflict(plain as Booking, meetingType, host);
+  if (conflict) {
+    await handlePostPaymentConflict(plain as Booking, meetingType, host, conflict);
+    return;
+  }
+
+  try {
+    await confirmWithCalendar(plain as Booking, meetingType, host);
+  } catch {
+    // confirmWithCalendar already marked FAILED_NEEDS_INTERVENTION and alerted.
+  }
+}
+
+/**
  * Stripe `checkout.session.completed`. Idempotent: the first delivery claims the
  * booking with a conditional update; later deliveries are no-ops.
  */
@@ -426,7 +510,6 @@ export async function finalizePaidBooking(session: {
 }): Promise<void> {
   const existing = await prisma.booking.findUnique({
     where: { stripeSessionId: session.id },
-    include: { meetingType: true, host: true },
   });
 
   if (!existing) {
@@ -455,23 +538,48 @@ export async function finalizePaidBooking(session: {
     return;
   }
 
-  if (existing.status === "CONFIRMED" && existing.googleEventId) return;
+  await settleClaimedBooking(existing.id);
+}
 
-  const booking = await prisma.booking.findUniqueOrThrow({ where: { id: existing.id } });
-  const { meetingType, host } = existing;
+/**
+ * Stripe `payment_intent.succeeded` for the embedded flow. Same idempotent
+ * claim, keyed on the PaymentIntent id stored at intent creation.
+ */
+export async function finalizePaidIntent(intent: {
+  id: string;
+  amount_received: number | null;
+}): Promise<void> {
+  const existing = await prisma.booking.findFirst({
+    where: { stripePaymentIntentId: intent.id },
+    select: { id: true, status: true, amountCents: true },
+  });
 
-  // Payment landed — did anything steal the slot in the meantime?
-  const conflict = await findPostPaymentConflict(booking, meetingType, host);
-  if (conflict) {
-    await handlePostPaymentConflict(booking, meetingType, host, conflict);
+  if (!existing) {
+    // Not one of ours — a shared Stripe account fires everything at everyone.
+    log.info("stripe-webhook", "unknown_intent_ignored", { intentId: intent.id });
     return;
   }
 
-  try {
-    await confirmWithCalendar(booking, meetingType, host);
-  } catch {
-    // confirmWithCalendar already marked FAILED_NEEDS_INTERVENTION and alerted.
+  const claimed = await prisma.booking.updateMany({
+    where: { id: existing.id, webhookProcessedAt: null },
+    data: {
+      webhookProcessedAt: new Date(),
+      stripePaymentStatus: "paid",
+      stripePaidAt: new Date(),
+      amountCents: intent.amount_received || existing.amountCents,
+    },
+  });
+
+  if (claimed.count === 0) {
+    log.info("stripe-webhook", "duplicate_ignored", {
+      intentId: intent.id,
+      bookingId: existing.id,
+      status: existing.status,
+    });
+    return;
   }
+
+  await settleClaimedBooking(existing.id);
 }
 
 /**

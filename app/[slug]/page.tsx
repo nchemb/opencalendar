@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import BookingFlow from "@/components/booking/BookingFlow";
+import { env } from "@/lib/env";
 import { findActiveMeetingType, hostBookingBlocked, toPublic } from "@/lib/meeting-types";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +34,7 @@ export default async function BookingPage({ params }: { params: { slug: string }
         meetingType={toPublic(meetingType, host)}
         hostEmail={host.email}
         blocked={hostBookingBlocked(host)}
+        stripePublishableKey={env("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY") ?? null}
       />
     </main>
   );

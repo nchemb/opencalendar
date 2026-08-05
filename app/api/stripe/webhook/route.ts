@@ -1,6 +1,6 @@
 import type Stripe from "stripe";
 import { sendWebhookSignatureAlert } from "@/lib/alerts";
-import { expireBookingBySession, finalizePaidBooking } from "@/lib/booking";
+import { expireBookingBySession, finalizePaidBooking, finalizePaidIntent } from "@/lib/booking";
 import { fail, ok } from "@/lib/http";
 import { env } from "@/lib/env";
 import { errorMessage, log } from "@/lib/logger";
@@ -61,6 +61,12 @@ export async function POST(req: Request) {
     } else if (event.type === "checkout.session.expired") {
       const session = event.data.object as Stripe.Checkout.Session;
       await expireBookingBySession(session.id);
+    } else if (event.type === "payment_intent.succeeded") {
+      const intent = event.data.object as Stripe.PaymentIntent;
+      await finalizePaidIntent({
+        id: intent.id,
+        amount_received: intent.amount_received ?? null,
+      });
     }
   } catch (err) {
     // Return 500 so Stripe retries — the handler is idempotent.

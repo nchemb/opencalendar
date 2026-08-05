@@ -170,16 +170,17 @@ export default function SuccessView() {
         </p>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-2.5">
-        {booking.meetLink && (
-          <a className="bk-btn bk-btn-primary flex-1" href={booking.meetLink} target="_blank" rel="noreferrer">
-            Join Google Meet
+      <a className="bk-btn bk-btn-primary w-full" href={addToCalendarUrl(booking)} target="_blank" rel="noreferrer">
+        Add to calendar
+      </a>
+      {booking.meetLink && (
+        <p className="text-xs text-[var(--bk-muted)] mt-3 text-center break-all">
+          Meet link for when it&apos;s time:{" "}
+          <a className="underline" href={booking.meetLink} target="_blank" rel="noreferrer">
+            {booking.meetLink.replace("https://", "")}
           </a>
-        )}
-        <a className="bk-btn bk-btn-ghost flex-1" href={addToCalendarUrl(booking)} target="_blank" rel="noreferrer">
-          Add to calendar
-        </a>
-      </div>
+        </p>
+      )}
 
       {booking.cancelToken && (
         <p className="text-xs text-[var(--bk-muted)] mt-5 text-center">

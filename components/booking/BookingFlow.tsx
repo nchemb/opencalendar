@@ -3,6 +3,7 @@
 import { DateTime } from "luxon";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PublicMeetingType } from "@/lib/types";
+import PaymentStep from "./PaymentStep";
 import { useTimezone } from "./useTimezone";
 
 type Props = {
@@ -14,9 +15,11 @@ type Props = {
   hideDescription?: boolean;
   /** Render header/footer chrome around the picker. */
   chrome?: boolean;
+  /** Enables the inline card step; falls back to hosted Checkout when absent. */
+  stripePublishableKey?: string | null;
 };
 
-type Step = "calendar" | "details" | "confirmed";
+type Step = "calendar" | "details" | "payment" | "confirming" | "confirmed";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -37,6 +40,28 @@ function post(event: string, detail: Record<string, unknown>) {
   }
 }
 
+/** Google Calendar "add event" template — for bookers who skip the invite. */
+function addToCalendarUrl(args: {
+  title: string;
+  startIso: string;
+  durationMinutes: number;
+  meetLink: string | null;
+}) {
+  const fmt = (iso: string) =>
+    DateTime.fromISO(iso).toUTC().toFormat("yyyyLLdd'T'HHmmss'Z'");
+  const end = DateTime.fromISO(args.startIso)
+    .plus({ minutes: args.durationMinutes })
+    .toUTC()
+    .toISO()!;
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: args.title,
+    dates: `${fmt(args.startIso)}/${fmt(end)}`,
+    details: args.meetLink ? `Google Meet: ${args.meetLink}` : "",
+  });
+  return `https://calendar.google.com/calendar/render?${params}`;
+}
+
 export default function BookingFlow({
   meetingType,
   hostEmail,
@@ -44,6 +69,7 @@ export default function BookingFlow({
   embed = false,
   hideDescription = false,
   chrome = true,
+  stripePublishableKey = null,
 }: Props) {
   const { timezone, setTimezone, zones, ready } = useTimezone();
 
@@ -69,6 +95,11 @@ export default function BookingFlow({
     startTime: string;
     meetLink: string | null;
     cancelToken: string;
+  } | null>(null);
+  const [payment, setPayment] = useState<{
+    bookingId: string;
+    clientSecret: string;
+    expiresAt: string;
   } | null>(null);
 
   const mountedAt = useRef(Date.now());
@@ -181,6 +212,49 @@ export default function BookingFlow({
     });
   }
 
+  const slotLost = useCallback(() => {
+    setPayment(null);
+    setSelectedSlot(null);
+    setStep("calendar");
+    setFormError("That hold expired. Pick a time again.");
+    void loadSlots();
+  }, [loadSlots]);
+
+  /** After an inline payment: poll until the webhook confirms, then show it. */
+  const onPaid = useCallback(
+    (bookingId: string) => {
+      post("bookkit.booked", {
+        slug: meetingType.slug,
+        bookingId,
+        startTime: selectedSlot,
+        timezone,
+      });
+      if (!embed) {
+        window.location.href = `/success?booking=${bookingId}`;
+        return;
+      }
+      setStep("confirming");
+      let attempts = 0;
+      const poll = async () => {
+        attempts += 1;
+        try {
+          const res = await fetch(`/api/bookings/${bookingId}`, { cache: "no-store" });
+          const data = await res.json();
+          if (data.ok && data.booking.status === "CONFIRMED") {
+            setConfirmed(data.booking);
+            setStep("confirmed");
+            return;
+          }
+        } catch {
+          /* retry */
+        }
+        if (attempts < 40) setTimeout(poll, 1500);
+      };
+      void poll();
+    },
+    [embed, meetingType.slug, selectedSlot, timezone]
+  );
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedSlot || submitting) return;
@@ -199,8 +273,15 @@ export default function BookingFlow({
       elapsedMs: Date.now() - mountedAt.current,
     };
 
+    // Paid + publishable key => inline card step. Paid without key => hosted Checkout.
+    const inlinePay = paid && Boolean(stripePublishableKey);
+
     try {
-      const endpoint = paid ? "/api/stripe/checkout" : "/api/bookings";
+      const endpoint = inlinePay
+        ? "/api/stripe/intent"
+        : paid
+          ? "/api/stripe/checkout"
+          : "/api/bookings";
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -215,6 +296,17 @@ export default function BookingFlow({
           setStep("calendar");
           void loadSlots();
         }
+        return;
+      }
+
+      if (inlinePay) {
+        setPayment({
+          bookingId: data.bookingId,
+          clientSecret: data.clientSecret,
+          expiresAt: data.expiresAt,
+        });
+        setStep("payment");
+        post("bookkit.checkout", { slug: meetingType.slug, inline: true });
         return;
       }
 
@@ -268,6 +360,21 @@ export default function BookingFlow({
     );
   }
 
+  /* ---------------- confirming (inline payment, waiting on webhook) ---------------- */
+  if (step === "confirming") {
+    return (
+      <div ref={rootRef} style={accent} className="bk-card p-6 sm:p-8 max-w-md mx-auto text-center bk-fade">
+        <svg className="bk-spin mx-auto mb-4" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--bk-accent)" strokeWidth="2.5" strokeLinecap="round">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </svg>
+        <h2 className="text-lg font-semibold mb-2">Payment received — confirming…</h2>
+        <p className="text-[var(--bk-muted)] text-sm">
+          Locking in your time and sending the calendar invite. A few seconds.
+        </p>
+      </div>
+    );
+  }
+
   /* ---------------- confirmed (embed only) ---------------- */
   if (step === "confirmed" && confirmed) {
     const when = DateTime.fromISO(confirmed.startTime, { zone: timezone });
@@ -283,17 +390,74 @@ export default function BookingFlow({
         </div>
         <h2 className="text-xl font-semibold mb-1">You&apos;re booked</h2>
         <p className="text-[var(--bk-muted)] text-sm mb-5">
-          {meetingType.name} — a calendar invite is on its way to {email}.
+          {meetingType.name} — a calendar invite with the Google Meet link is on its way to {email}.
         </p>
         <p className="font-medium mb-1">{when.toFormat("cccc, LLLL d")}</p>
         <p className="text-[var(--bk-muted)] text-sm mb-5">
           {when.toFormat("h:mm a")} – {when.plus({ minutes: meetingType.durationMinutes }).toFormat("h:mm a ZZZZ")}
         </p>
+        <a
+          className="bk-btn bk-btn-primary w-full"
+          href={addToCalendarUrl({
+            title: meetingType.name,
+            startIso: confirmed.startTime,
+            durationMinutes: meetingType.durationMinutes,
+            meetLink: confirmed.meetLink,
+          })}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Add to calendar
+        </a>
         {confirmed.meetLink && (
-          <a className="bk-btn bk-btn-primary w-full" href={confirmed.meetLink} target="_blank" rel="noreferrer">
-            Join Google Meet
-          </a>
+          <p className="text-xs text-[var(--bk-muted)] mt-3 text-center break-all">
+            Meet link for when it&apos;s time:{" "}
+            <a className="underline" href={confirmed.meetLink} target="_blank" rel="noreferrer">
+              {confirmed.meetLink.replace("https://", "")}
+            </a>
+          </p>
         )}
+      </div>
+    );
+  }
+
+  /* ---------------- inline payment ---------------- */
+  if (step === "payment" && payment && selectedSlot && stripePublishableKey) {
+    const when = DateTime.fromISO(selectedSlot, { zone: timezone });
+    return (
+      <div ref={rootRef} style={accent} className="bk-card p-5 sm:p-7 max-w-md mx-auto bk-fade">
+        <button
+          type="button"
+          onClick={() => {
+            // Hold stays until it lapses; going back just returns to the form.
+            setStep("details");
+          }}
+          className="text-sm text-[var(--bk-muted)] hover:text-[var(--bk-fg)] mb-4 inline-flex items-center gap-1.5"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+          Back
+        </button>
+
+        <h2 className="text-lg font-semibold mb-1">{meetingType.name}</h2>
+        <p className="text-sm mb-1" style={{ color: "var(--bk-accent)" }}>
+          {when.toFormat("cccc, LLLL d")} · {when.toFormat("h:mm a")}
+        </p>
+        <p className="text-xs text-[var(--bk-muted)] mb-5">
+          {meetingType.durationMinutes} min · {when.toFormat("ZZZZ")} · {name} ({email})
+        </p>
+
+        <PaymentStep
+          publishableKey={stripePublishableKey}
+          clientSecret={payment.clientSecret}
+          bookingId={payment.bookingId}
+          expiresAt={payment.expiresAt}
+          accentColor={meetingType.color}
+          amountLabel={money(meetingType.priceCents!, meetingType.currency)}
+          onPaid={onPaid}
+          onExpired={slotLost}
+        />
       </div>
     );
   }
@@ -383,10 +547,10 @@ export default function BookingFlow({
                 <svg className="bk-spin" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                   <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                 </svg>
-                {paid ? "Opening checkout…" : "Booking…"}
+                {paid ? "One moment…" : "Booking…"}
               </>
             ) : paid ? (
-              `Pay ${money(meetingType.priceCents!, meetingType.currency)} and book`
+              stripePublishableKey ? "Continue to payment" : `Pay ${money(meetingType.priceCents!, meetingType.currency)} and book`
             ) : (
               "Confirm booking"
             )}
@@ -394,7 +558,7 @@ export default function BookingFlow({
 
           {paid && (
             <p className="text-xs text-[var(--bk-muted)] text-center">
-              Secure checkout by Stripe. This slot is held for you for 30 minutes.
+              {money(meetingType.priceCents!, meetingType.currency)} · secured by Stripe · the time is held for you while you pay
             </p>
           )}
         </form>
