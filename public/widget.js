@@ -42,7 +42,7 @@
       "backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px;" +
       "opacity:0;transition:opacity .18s ease}" +
       ".bookkit-overlay.is-open{opacity:1}" +
-      ".bookkit-modal{position:relative;width:100%;max-width:860px;height:min(88vh,760px);" +
+      ".bookkit-modal{position:relative;width:100%;max-width:720px;height:min(88vh,740px);" +
       "border-radius:16px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.5);" +
       "transform:translateY(8px);transition:transform .18s ease}" +
       ".bookkit-overlay.is-open .bookkit-modal{transform:none}" +
