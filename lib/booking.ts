@@ -11,7 +11,7 @@ import {
   freeBusy,
 } from "./google";
 import { errorMessage, log } from "./logger";
-import { stripe } from "./stripe";
+import { formatPrice, stripe } from "./stripe";
 import { deliverBookingWebhook } from "./outbound-webhook";
 import {
   formatWhen,
@@ -299,8 +299,6 @@ async function confirmWithCalendar(
 
 function buildEventDescription(booking: Booking, meetingType: MeetingType): string {
   const lines = [
-    `Booked via BookKit — ${appUrl()}/${meetingType.slug}`,
-    "",
     `Name: ${booking.name}`,
     `Email: ${booking.email}`,
     `Their timezone: ${booking.timezone}`,
@@ -309,9 +307,9 @@ function buildEventDescription(booking: Booking, meetingType: MeetingType): stri
     lines.push("", meetingType.customQuestion, booking.customAnswer);
   }
   if (booking.amountCents) {
-    lines.push("", `Paid: ${(booking.amountCents / 100).toFixed(2)} ${meetingType.currency.toUpperCase()}`);
+    lines.push("", `Paid: ${formatPrice(booking.amountCents, meetingType.currency)}`);
   }
-  lines.push("", `Cancel: ${appUrl()}/cancel/${booking.cancelToken}`);
+  lines.push("", `Cancel or reschedule: ${appUrl()}/cancel/${booking.cancelToken}`);
   return lines.join("\n");
 }
 
