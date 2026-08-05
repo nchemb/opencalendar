@@ -140,10 +140,11 @@
     document.documentElement.style.overflow = "hidden";
     document.body.appendChild(overlay);
 
-    // next frame so the transition runs
-    requestAnimationFrame(function () {
-      overlay.classList.add("is-open");
-    });
+    // Force a reflow, then reveal. Doing this synchronously (rather than inside
+    // requestAnimationFrame) means the popup can never be left stuck at opacity 0
+    // in a context where rAF is throttled or deferred.
+    void overlay.offsetWidth;
+    overlay.classList.add("is-open");
 
     openOverlay = overlay;
     return { close: closeOverlay };
