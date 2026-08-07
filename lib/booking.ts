@@ -2,7 +2,7 @@ import { Prisma, type Booking, type Host, type MeetingType } from "@prisma/clien
 import { DateTime } from "luxon";
 import { prisma } from "./db";
 import { appUrl, isDemoMode } from "./env";
-import { isSlotOnGrid } from "./availability";
+import { isSlotOnGrid, liveBookingStatusFilter } from "./availability";
 import { calendar } from "./calendar";
 import { GoogleApiError, GoogleAuthError } from "./calendar-types";
 import { errorMessage, log } from "./logger";
@@ -102,6 +102,32 @@ async function withHostLock<T>(hostId: string, fn: (tx: TxClient) => Promise<T>)
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
+/**
+ * Retire holds whose expiresAt has passed, for this host, inside the lock.
+ *
+ * Every read path already treats an expired hold as free, but the partial unique
+ * index `Booking_live_slot_key` counts *all* PENDING_PAYMENT rows as live — a
+ * partial index predicate cannot reference now(), so it cannot express "unexpired".
+ *
+ * Without this sweep the two disagree, and the slot dies: normally
+ * `checkout.session.expired` retires the row, but if that webhook never arrives
+ * (endpoint down, secret rotated, Stripe not configured at all) the stale hold
+ * stays PENDING_PAYMENT forever. Availability keeps advertising the slot while
+ * every attempt to book it fails the unique index. Cheap to do here — we already
+ * hold the lock — and it keeps the "no cron jobs" promise honest.
+ */
+async function sweepExpiredHoldsInTx(tx: TxClient, hostId: string, now: Date): Promise<void> {
+  await tx.booking.updateMany({
+    where: {
+      hostId,
+      status: "PENDING_PAYMENT",
+      expiresAt: { lte: now },
+      stripePaymentStatus: { not: "paid" },
+    },
+    data: { status: "EXPIRED", expiresAt: null },
+  });
+}
+
 async function overlapsInTx(
   tx: TxClient,
   hostId: string,
@@ -116,10 +142,7 @@ async function overlapsInTx(
       ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
       startTime: { lt: endTime },
       endTime: { gt: startTime },
-      OR: [
-        { status: "CONFIRMED" },
-        { status: "PENDING_PAYMENT", expiresAt: { gt: now } },
-      ],
+      OR: liveBookingStatusFilter(now),
     },
   });
 }
@@ -140,10 +163,7 @@ async function dailyLimitReachedInTx(
     where: {
       meetingTypeId: meetingType.id,
       startTime: { gte: dayStart, lte: dayEnd },
-      OR: [
-        { status: "CONFIRMED" },
-        { status: "PENDING_PAYMENT", expiresAt: { gt: now } },
-      ],
+      OR: liveBookingStatusFilter(now),
     },
   });
   return count >= meetingType.dailyLimit;
@@ -185,6 +205,8 @@ async function reserveSlot(
 
   try {
     return await withHostLock(host.id, async (tx) => {
+      await sweepExpiredHoldsInTx(tx, host.id, now);
+
       const clash = await overlapsInTx(tx, host.id, guardStart, guardEnd, now);
       if (clash) throw new SlotTakenError();
 
@@ -610,10 +632,7 @@ async function findPostPaymentConflict(
       id: { not: booking.id },
       startTime: { lt: guardEnd },
       endTime: { gt: guardStart },
-      OR: [
-        { status: "CONFIRMED" },
-        { status: "PENDING_PAYMENT", expiresAt: { gt: now } },
-      ],
+      OR: liveBookingStatusFilter(now),
     },
     select: { id: true },
   });

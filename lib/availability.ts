@@ -150,6 +150,24 @@ export function isSlotOnGrid(
   return slots.some((s) => s.getTime() === startTime.getTime());
 }
 
+/**
+ * What counts as a booking that owns its slot.
+ *
+ * A hold is live until it expires — except a paid one, which owns the slot no
+ * matter how long settlement takes. Losing that case would hand someone else a
+ * slot the first booker has already been charged for.
+ *
+ * Every read path and the booking transaction share this definition on purpose:
+ * when they drifted apart, a slot could read as free and then fail to insert.
+ */
+export function liveBookingStatusFilter(now: Date) {
+  return [
+    { status: "CONFIRMED" as const },
+    { status: "PENDING_PAYMENT" as const, expiresAt: { gt: now } },
+    { status: "PENDING_PAYMENT" as const, stripePaymentStatus: "paid" },
+  ];
+}
+
 /** Live (slot-consuming) bookings for the host inside a window. */
 export async function liveBookingIntervals(
   hostId: string,
@@ -164,11 +182,9 @@ export async function liveBookingIntervals(
       ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
       startTime: { lt: rangeEnd },
       endTime: { gt: rangeStart },
-      OR: [
-        { status: "CONFIRMED" },
-        // Unexpired holds only — expired holds are lazily treated as free.
-        { status: "PENDING_PAYMENT", expiresAt: { gt: now } },
-      ],
+      // Unexpired holds, plus paid-but-not-yet-settled ones. Expired unpaid
+      // holds are lazily treated as free.
+      OR: liveBookingStatusFilter(now),
     },
     select: { startTime: true, endTime: true },
   });
@@ -189,10 +205,7 @@ export async function dailyBookingCounts(
       meetingTypeId,
       ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
       startTime: { gte: rangeStart, lt: rangeEnd },
-      OR: [
-        { status: "CONFIRMED" },
-        { status: "PENDING_PAYMENT", expiresAt: { gt: now } },
-      ],
+      OR: liveBookingStatusFilter(now),
     },
     select: { startTime: true },
   });
