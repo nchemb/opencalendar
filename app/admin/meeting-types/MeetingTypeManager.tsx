@@ -504,11 +504,16 @@ function Editor({ value, onClose }: { value: EditableMeetingType; onClose: () =>
   );
 }
 
+/**
+ * The control is nested inside the label so the two are genuinely associated —
+ * a bare <label> sitting next to an input announces nothing to a screen reader
+ * and cannot be clicked to focus the field.
+ */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="bk-label">{label}</label>
+    <label className="block">
+      <span className="bk-label">{label}</span>
       {children}
-    </div>
+    </label>
   );
 }

@@ -49,12 +49,15 @@
       ".bookkit-overlay.is-open .bookkit-modal{transform:none}" +
       // The iframe grows to its content (via bookkit.resize) and the MODAL scrolls —
       // nested iframe scrolling is a touch trap on mobile.
-      ".bookkit-modal iframe{width:100%;height:640px;border:0;display:block;background:transparent}" +
+      // width:1px + min-width:100% is the long-standing iOS fix: without it
+      // Safari stretches an iframe to its content's layout viewport instead of
+      // sizing it to the container.
+      ".bookkit-modal iframe{width:1px;min-width:100%;height:640px;border:0;display:block;background:transparent}" +
       ".bookkit-close{position:sticky;top:10px;float:right;margin:10px 10px 0 0;width:32px;height:32px;border:0;z-index:2;" +
       "border-radius:999px;background:rgba(20,20,22,.9);color:#fff;font-size:19px;line-height:1;" +
       "cursor:pointer;display:flex;align-items:center;justify-content:center}" +
       ".bookkit-close:hover{background:rgba(40,40,44,.95)}" +
-      ".bookkit-inline{width:100%;border:0;display:block;background:transparent;min-height:520px;" +
+      ".bookkit-inline{width:1px;min-width:100%;border:0;display:block;background:transparent;min-height:520px;" +
       "transition:height .15s ease}" +
       "@media (max-width:640px){.bookkit-modal{max-height:94vh;max-width:100%}}";
     var el = document.createElement("style");

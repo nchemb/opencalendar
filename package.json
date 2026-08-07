@@ -19,6 +19,9 @@
     "test:integration": "vitest run --project integration",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:all": "npm run typecheck && npm run test && npm run test:e2e",
     "db:up": "docker compose up -d --wait"
   },
   "dependencies": {
@@ -34,6 +37,7 @@
     "stripe": "^20.4.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/luxon": "^3.4.2",
     "@types/node": "^22.10.0",

@@ -379,7 +379,12 @@ export default function BookingFlow({
   if (step === "confirmed" && confirmed) {
     const when = DateTime.fromISO(confirmed.startTime, { zone: timezone });
     return (
-      <div ref={rootRef} style={accent} className="bk-card p-6 sm:p-8 max-w-md mx-auto bk-fade">
+      <div
+        ref={rootRef}
+        style={accent}
+        data-testid="bk-confirmed"
+        className="bk-card p-6 sm:p-8 max-w-md mx-auto bk-fade"
+      >
         <div
           className="w-11 h-11 rounded-full grid place-items-center mb-4"
           style={{ background: "color-mix(in srgb, var(--bk-accent) 18%, transparent)" }}
@@ -673,6 +678,9 @@ export default function BookingFlow({
                   <button
                     key={key}
                     type="button"
+                    data-testid="bk-day"
+                    data-date={key}
+                    data-open={open ? "1" : "0"}
                     disabled={!open}
                     onClick={() => {
                       setSelectedDay(key);
@@ -747,16 +755,28 @@ export default function BookingFlow({
                 ? DateTime.fromFormat(selectedDay, "yyyy-MM-dd", { zone: timezone }).toFormat("cccc, LLL d")
                 : "Pick a day"}
             </p>
-            {/* Side-by-side: slots scroll in their own column. Stacked (mobile):
-                flow full height so the page scrolls natively — an inner scrollbox
-                inside an embed iframe is a scroll trap on touch devices. */}
-            <div className="bk-scroll flex flex-col gap-2 @xl:max-h-[330px] @xl:overflow-y-auto @xl:pr-1">
+            {/* Standalone, side-by-side: the slot column scrolls on its own so
+                the card keeps a sane height.
+
+                Never inside an embed. A phone gives an iframe a 980px layout
+                viewport — the viewport meta only applies to the top-level frame —
+                so the container query reads "wide", picks the side-by-side
+                layout, and puts 800+px of slots inside a 330px box that is then
+                squashed into a 400px-wide phone. The auto-height resize message
+                already grows the iframe to fit, so the embed simply flows. */}
+            <div
+              className={`bk-scroll flex flex-col gap-2 ${
+                embed ? "" : "@xl:max-h-[330px] @xl:overflow-y-auto @xl:pr-1"
+              }`}
+            >
               {daySlots.map((iso) => {
                 const t = DateTime.fromISO(iso, { zone: timezone });
                 return (
                   <button
                     key={iso}
                     type="button"
+                    data-testid="bk-slot"
+                    data-slot={iso}
                     onClick={() => pickSlot(iso)}
                     className={`bk-slot ${selectedSlot === iso ? "bk-slot-active" : ""}`}
                   >
