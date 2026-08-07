@@ -21,10 +21,20 @@ export function appUrl(): string {
 }
 
 /**
- * Demo mode: calendar writes go to an in-memory fake instead of real Google
- * Calendar, paid meeting types are refused, and public pages carry a banner.
- * Powers the hosted demo instance and the test suite. Never set this on a real
- * deployment — bookings would never reach anybody's calendar.
+ * Which calendar backend to use. "google" is the only real one; "memory" is an
+ * in-process fake that the test suite and the hosted demo book against. Demo
+ * mode implies memory — a demo must never write to a real calendar.
+ */
+export function calendarBackend(): "google" | "memory" {
+  if (isDemoMode()) return "memory";
+  return env("BOOKKIT_CALENDAR") === "memory" ? "memory" : "google";
+}
+
+/**
+ * Demo mode: the hosted, publicly bookable instance. Implies the memory
+ * calendar, refuses paid meeting types so no real card is ever charged, and
+ * makes public pages carry a "resets daily" banner. Never set this on a real
+ * deployment — bookings would not reach anybody's calendar.
  */
 export const isDemoMode = () => env("BOOKKIT_DEMO_MODE") === "1";
 

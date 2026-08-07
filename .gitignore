@@ -19,3 +19,9 @@ next-env.d.ts
 
 # prisma
 prisma/*.db
+
+# test + coverage artifacts
+coverage
+test-results
+playwright-report
+.playwright

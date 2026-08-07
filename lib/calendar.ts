@@ -5,13 +5,13 @@
  * Production returns the Google-backed port; demo mode and the test suite return
  * the in-memory one. To add a backend, implement CalendarPort and branch here.
  */
-import { isDemoMode } from "./env";
+import { calendarBackend } from "./env";
 import { googleCalendar } from "./google";
 import { memoryCalendar } from "./calendar-memory";
 import type { CalendarPort } from "./calendar-types";
 
 export function calendar(): CalendarPort {
-  return isDemoMode() ? memoryCalendar : googleCalendar;
+  return calendarBackend() === "memory" ? memoryCalendar : googleCalendar;
 }
 
 export type {

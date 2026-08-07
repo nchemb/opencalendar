@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "vitest";
 import { DateTime } from "luxon";
-import { generateSlots, isSlotOnGrid } from "../lib/availability";
-import type { WeeklyHours } from "../lib/types";
+import { generateSlots, isSlotOnGrid } from "../../lib/availability";
+import type { WeeklyHours } from "../../lib/types";
 
 const CHICAGO = "America/Chicago";
 const NINE_TO_FIVE: WeeklyHours = {

@@ -1,0 +1,29 @@
+# Local Postgres for development and the test suite.
+#
+#   docker compose up -d
+#   cp .env.example .env      # DATABASE_URL already points here
+#   npx prisma migrate deploy
+#
+# The test suite talks to the `bookkit_test` database on the same server, which
+# `npm run test:integration` creates and migrates for you.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: bookkit-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bookkit
+      POSTGRES_PASSWORD: bookkit
+      POSTGRES_DB: bookkit
+    ports:
+      - "5433:5432"
+    volumes:
+      - bookkit-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bookkit -d bookkit"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  bookkit-pgdata:

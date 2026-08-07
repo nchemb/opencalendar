@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import test from "node:test";
-import { parseQuestions, MAX_QUESTIONS } from "../lib/types";
-import { parseAnswers } from "../lib/validate";
+import { test } from "vitest";
+import { parseQuestions, MAX_QUESTIONS } from "../../lib/types";
+import { parseAnswers } from "../../lib/validate";
 
 /* ---------------- parseQuestions ---------------- */
 
