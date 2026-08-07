@@ -1,15 +1,10 @@
 import { Prisma, type Booking, type Host, type MeetingType } from "@prisma/client";
 import { DateTime } from "luxon";
 import { prisma } from "./db";
-import { appUrl } from "./env";
+import { appUrl, isDemoMode } from "./env";
 import { isSlotOnGrid } from "./availability";
-import {
-  GoogleApiError,
-  GoogleAuthError,
-  createEventWithRetry,
-  deleteEvent,
-  freeBusy,
-} from "./google";
+import { calendar } from "./calendar";
+import { GoogleApiError, GoogleAuthError } from "./calendar-types";
 import { errorMessage, log } from "./logger";
 import { formatPrice, stripe } from "./stripe";
 import { deliverBookingWebhook } from "./outbound-webhook";
@@ -199,7 +194,7 @@ async function reserveSlot(
 
       // Live re-check against the real calendar, inside the lock: catches events the
       // host added by hand since the page was rendered.
-      const busy = await freeBusy(host, guardStart, guardEnd);
+      const busy = await calendar().freeBusy(host, guardStart, guardEnd);
       const busyClash = busy.some(
         (b) => b.start.getTime() < guardEnd.getTime() && b.end.getTime() > guardStart.getTime()
       );
@@ -246,7 +241,7 @@ async function confirmWithCalendar(
   const paid = booking.stripePaymentStatus === "paid";
 
   try {
-    const event = await createEventWithRetry(host, {
+    const event = await calendar().createEventWithRetry(host, {
       bookingId: booking.id,
       summary: `${meetingType.name} — ${booking.name}`,
       description: buildEventDescription(booking, meetingType),
@@ -356,6 +351,10 @@ export async function startPaidCheckout(
   if (!meetingType.priceCents || meetingType.priceCents <= 0) {
     throw new InvalidSlotError("This meeting type is free — no payment needed.");
   }
+  // The demo instance must never touch a real card.
+  if (isDemoMode()) {
+    throw new BookingUnavailableError("Paid bookings are disabled on the demo instance.");
+  }
 
   const booking = await reserveSlot(
     host,
@@ -429,6 +428,10 @@ export async function startPaidIntent(
 ): Promise<{ booking: Booking; clientSecret: string; expiresAt: string }> {
   if (!meetingType.priceCents || meetingType.priceCents <= 0) {
     throw new InvalidSlotError("This meeting type is free — no payment needed.");
+  }
+  // The demo instance must never touch a real card.
+  if (isDemoMode()) {
+    throw new BookingUnavailableError("Paid bookings are disabled on the demo instance.");
   }
 
   const booking = await reserveSlot(
@@ -617,7 +620,7 @@ async function findPostPaymentConflict(
   if (dbClash) return `overlapping booking ${dbClash.id}`;
 
   try {
-    const busy = await freeBusy(host, guardStart, guardEnd);
+    const busy = await calendar().freeBusy(host, guardStart, guardEnd);
     const clash = busy.find(
       (b) => b.start.getTime() < guardEnd.getTime() && b.end.getTime() > guardStart.getTime()
     );
@@ -705,7 +708,7 @@ export async function cancelBooking(
 
   if (booking.googleEventId) {
     try {
-      await deleteEvent(booking.host, booking.googleEventId);
+      await calendar().deleteEvent(booking.host, booking.googleEventId);
     } catch (err) {
       calendarRemoved = false;
       log.error("booking", "calendar_delete_failed", {

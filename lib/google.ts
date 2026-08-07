@@ -4,28 +4,24 @@ import { prisma } from "./db";
 import { env, googleRedirectUri, requireEnv } from "./env";
 import { errorMessage, log } from "./logger";
 
+import {
+  GoogleApiError,
+  GoogleAuthError,
+  type BusyInterval,
+  type CalendarPort,
+  type CreateEventArgs,
+  type CreatedEvent,
+} from "./calendar-types";
+
+// Re-exported so existing importers of "@/lib/google" keep working. New code
+// should import the types from "./calendar-types" and the impl via "./calendar".
+export { GoogleApiError, GoogleAuthError };
+export type { BusyInterval, CreatedEvent };
+
 export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.freebusy",
 ];
-
-/** The host must reconnect Google before bookings can work again. */
-export class GoogleAuthError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "GoogleAuthError";
-  }
-}
-
-/** Transient/unknown Google failure. Callers fail closed. */
-export class GoogleApiError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "GoogleApiError";
-  }
-}
-
-export type BusyInterval = { start: Date; end: Date };
 
 export function oauthClient() {
   return new google.auth.OAuth2(
@@ -169,19 +165,9 @@ export async function freeBusy(
   }
 }
 
-export type CreatedEvent = { eventId: string; meetLink: string | null; htmlLink: string | null };
-
 export async function createEvent(
   host: Host,
-  args: {
-    bookingId: string;
-    summary: string;
-    description: string;
-    startTime: Date;
-    endTime: Date;
-    attendeeEmail: string;
-    attendeeName: string;
-  }
+  args: CreateEventArgs
 ): Promise<CreatedEvent> {
   const calendar = await calendarClient(host);
 
@@ -253,7 +239,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  */
 export async function createEventWithRetry(
   host: Host,
-  args: Parameters<typeof createEvent>[1],
+  args: CreateEventArgs,
   maxAttempts = 3
 ): Promise<CreatedEvent> {
   let lastErr: unknown;
@@ -274,3 +260,10 @@ export async function createEventWithRetry(
   }
   throw lastErr instanceof Error ? lastErr : new GoogleApiError(String(lastErr));
 }
+
+/** The real Google Calendar backend. Selected by `calendar()` outside demo mode. */
+export const googleCalendar: CalendarPort = {
+  freeBusy,
+  createEventWithRetry,
+  deleteEvent,
+};

@@ -20,6 +20,14 @@ export function appUrl(): string {
   return "http://localhost:3000";
 }
 
+/**
+ * Demo mode: calendar writes go to an in-memory fake instead of real Google
+ * Calendar, paid meeting types are refused, and public pages carry a banner.
+ * Powers the hosted demo instance and the test suite. Never set this on a real
+ * deployment — bookings would never reach anybody's calendar.
+ */
+export const isDemoMode = () => env("BOOKKIT_DEMO_MODE") === "1";
+
 export const hasStripe = () => Boolean(env("STRIPE_SECRET_KEY"));
 export const hasResend = () => Boolean(env("RESEND_API_KEY"));
 export const hasGoogleOAuth = () =>

@@ -1,7 +1,8 @@
 import { DateTime } from "luxon";
 import type { Host, MeetingType } from "@prisma/client";
 import { prisma } from "./db";
-import { freeBusy, type BusyInterval } from "./google";
+import { calendar } from "./calendar";
+import type { BusyInterval } from "./calendar-types";
 import { parseWeeklyHours, toMinutes, type WeeklyHours } from "./types";
 
 export type SlotInput = {
@@ -221,7 +222,7 @@ export async function getAvailability(
   const queryEnd = new Date(rangeEnd.getTime() + pad);
 
   const [googleBusy, dbBusy, dayCounts] = await Promise.all([
-    freeBusy(host, queryStart, queryEnd),
+    calendar().freeBusy(host, queryStart, queryEnd),
     liveBookingIntervals(host.id, queryStart, queryEnd, now),
     dailyBookingCounts(meetingType.id, host.timezone, queryStart, queryEnd, now),
   ]);
@@ -259,7 +260,7 @@ export async function isSlotOpen(
   const queryEnd = new Date(endTime.getTime() + pad);
 
   const [googleBusy, dbBusy, dayCounts] = await Promise.all([
-    freeBusy(host, queryStart, queryEnd),
+    calendar().freeBusy(host, queryStart, queryEnd),
     liveBookingIntervals(host.id, queryStart, queryEnd, now, excludeBookingId),
     dailyBookingCounts(
       meetingType.id,
