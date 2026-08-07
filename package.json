@@ -13,6 +13,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "seed": "tsx scripts/seed.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",

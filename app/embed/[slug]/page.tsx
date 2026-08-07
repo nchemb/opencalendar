@@ -44,7 +44,11 @@ export default async function EmbedPage({
       {/* The iframe must not paint its own page background over the host site. */}
       <style
         dangerouslySetInnerHTML={{
-          __html: "html,body{background:transparent !important;margin:0}",
+          __html:
+            "html,body{background:transparent !important;margin:0}" +
+            // The demo banner lives in the root layout; an embed dropped on
+            // someone else's page must not inherit it.
+            "[data-bookkit-demo-banner]{display:none !important}",
         }}
       />
       <BookingFlow
