@@ -1,0 +1,77 @@
+name: Bug report
+description: Something behaves differently from what the README says
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. If this is a security issue, please do not
+        file it here — see [SECURITY.md](../blob/main/SECURITY.md).
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you saw, and what you expected instead.
+      placeholder: |
+        I started a paid checkout, closed the tab, and came back the next day.
+        The slot still showed as available but booking it returned "That time
+        was just taken."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: Steps against a local instance if you can manage it.
+      placeholder: |
+        1. Create a meeting type with a price
+        2. …
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - Booking page
+        - Embed / widget.js
+        - Admin dashboard
+        - Payments (Stripe)
+        - Calendar (Google)
+        - Email
+        - Install / deployment
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v0.1.0, or the commit SHA you are running
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Where it runs, which Postgres, which Node.
+      placeholder: Vercel + Supabase, Node 22, Chrome 140 on iOS
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: >
+        BookKit logs one JSON object per line. Lines from the `booking`,
+        `stripe-webhook` or `google` components are usually the useful ones.
+        Redact emails and keys.
+      render: shell
+    validations:
+      required: false

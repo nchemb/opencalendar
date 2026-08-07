@@ -45,6 +45,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/*
+ * Any element declaring a theme re-applies the text colour from its own scope.
+ * Without this a [data-theme="light"] subtree inside the dark <html> redefines
+ * the tokens but keeps inheriting body's near-white `color`, so every heading
+ * and slot button renders white-on-white — only the elements that happen to set
+ * text-[var(--bk-*)] explicitly stay readable.
+ */
+[data-theme] {
+  color: var(--bk-fg);
+}
+
 body {
   font-family:
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;

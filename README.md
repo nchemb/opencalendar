@@ -1,17 +1,24 @@
 # BookKit
 
-A self-hosted Calendly replacement. One Next.js app that reads your real Google Calendar
-availability, writes events with Google Meet links, and takes Stripe payments for the
-meetings you charge for.
+[![CI](https://github.com/nchemb/bookkit/actions/workflows/ci.yml/badge.svg)](https://github.com/nchemb/bookkit/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-- **Free and paid meeting types** — put a price on a type and the slot is held while the
-  booker checks out.
+A self-hosted Calendly replacement. One Next.js app that reads your real Google
+Calendar availability, writes events with Google Meet links, and takes Stripe
+payments for the meetings you charge for.
+
+![The booking page](docs/screenshots/booking-page.png)
+
+- **Free and paid meeting types** — put a price on a type and the slot is held
+  while the booker checks out.
 - **Popup or inline embeds** — one `widget.js` does both, plus plain iframes.
-- **No double bookings** — every booking is claimed under a Postgres advisory lock that
-  re-checks your live calendar before committing.
-- **No silent failures** — if a payment lands and the calendar write fails, you get an
-  alert and a retry button rather than a lost booking.
-- **No cron jobs** — holds expire lazily and via Stripe's own `checkout.session.expired`.
+- **No double bookings** — every booking is claimed under a Postgres advisory
+  lock that re-checks your live calendar before committing.
+- **No silent failures** — if a payment lands and the calendar write fails, you
+  get an alert and a retry button rather than a lost booking.
+- **No cron jobs** — holds expire lazily and via Stripe's own
+  `checkout.session.expired`.
+- **Your data, your database.** No accounts, no vendor, no per-seat pricing.
 
 MIT licensed.
 
@@ -19,8 +26,8 @@ MIT licensed.
 
 ## Self-host in ~20 minutes
 
-You need: a Postgres database, a Google account, a Vercel account, and (only if you want
-paid bookings) Stripe.
+You need: a Postgres database, a Google account, a Vercel account, and (only if
+you want paid bookings) Stripe.
 
 ### 1. Clone and install
 
@@ -39,6 +46,9 @@ Any Postgres works. On Supabase (free tier):
 - `DATABASE_URL` = the **transaction pooler** string (port `6543`), with
   `?pgbouncer=true&connection_limit=1` appended.
 - `DIRECT_URL` = the **session pooler** string (port `5432`). Migrations use this.
+
+Prefer to run it locally? `docker compose up -d` starts Postgres on port 5433,
+and the matching URLs are commented at the bottom of `.env.example`.
 
 ```bash
 npx prisma migrate deploy
@@ -70,6 +80,8 @@ npm run dev
 
 Open `http://localhost:3000/admin`, log in with `ADMIN_PASSWORD`, and click
 **Connect Google Calendar**. Your booking page is live at `/<slug>`.
+
+![The admin dashboard](docs/screenshots/admin-meeting-types.png)
 
 ### 5. Stripe (only for paid types)
 
@@ -110,11 +122,17 @@ Add the script once:
 <button onclick="BookKit.popup('strategy-call')">Book a call</button>
 ```
 
-**Inline** — the picker renders straight into the page, no popup ever opens:
+![The popup embed](docs/screenshots/popup-embed.png)
+
+**Inline** — the picker renders straight into the page, no popup ever opens. It
+reports its own height, so the iframe grows to fit rather than scrolling inside
+itself:
 
 ```html
 <div data-bookkit="strategy-call" data-theme="dark" data-primary-color="#FF6A00"></div>
 ```
+
+![The inline embed](docs/screenshots/inline-embed.png)
 
 **Plain iframe** — no script needed:
 
@@ -160,16 +178,20 @@ never affect the booking.
 
 ## How it stays correct
 
-| Risk | What stops it |
-| --- | --- |
-| Two people book one slot | Booking runs inside a Serializable transaction that first takes a `pg_advisory_xact_lock` on the host, re-checks DB overlaps *and* live Google freebusy, then inserts. The loser gets a clean 409. |
-| Payment taken, no calendar event | Event creation retries 3× with backoff; if it still fails the booking becomes `FAILED_NEEDS_INTERVENTION`, you get an alert email, and the dashboard offers a retry. A booking is never `CONFIRMED` without an event id. |
-| Slot lost during checkout | The DB hold (33 min) always outlives the Stripe session (31 min), so payment cannot land on a released slot. If it somehow does, BookKit auto-refunds, emails an apology, and alerts you. |
-| Duplicate Stripe webhooks | `stripeSessionId` is unique and the first delivery claims the booking with a conditional update. Two deliveries produce one booking and one event. |
-| Abandoned checkout blocks the slot forever | No cron needed: `checkout.session.expired` releases the hold, and availability queries treat any hold past `expiresAt` as free. |
-| Google API down while rendering availability | Fails **closed** — no slots shown. Losing a booking beats double-booking. |
-| Google token revoked | Booking pages switch to an "email me" fallback and you get an alert. |
-| DST / timezone drift | Everything is stored UTC; all wall-clock maths goes through Luxon in the host timezone. `npm test` covers both DST transitions. |
+Every row here has tests behind it. If you change the behaviour, change the test.
+
+| Risk | What stops it | Covered by |
+| --- | --- | --- |
+| Two people book one slot | Booking runs inside a Serializable transaction that first takes a `pg_advisory_xact_lock` on the host, re-checks DB overlaps *and* live Google freebusy, then inserts. The loser gets a clean 409. | `concurrency.test.ts` |
+| Payment taken, no calendar event | Event creation retries 3× with backoff; if it still fails the booking becomes `FAILED_NEEDS_INTERVENTION`, you get an alert email, and the dashboard offers a retry. A booking is never `CONFIRMED` without an event id. | `calendar-failure.test.ts` |
+| Slot lost during checkout | The DB hold (33 min) always outlives the Stripe session (31 min), so payment cannot land on a released slot. If it somehow does, BookKit auto-refunds, emails an apology, and alerts you. | `paid-booking.test.ts` |
+| Duplicate Stripe webhooks | `stripeSessionId` is unique and the first delivery claims the booking with a conditional update. Two deliveries produce one booking and one event. | `paid-booking.test.ts` |
+| Abandoned checkout blocks the slot forever | No cron needed: `checkout.session.expired` releases the hold, availability treats any hold past `expiresAt` as free, and the booking transaction retires stale holds before it inserts — so a webhook that never arrives cannot leave a slot advertised but unbookable. | `paid-booking.test.ts` |
+| A forged webhook settles a booking | Stripe signature verification on the raw body, before anything is read. A failure alerts you and changes nothing. | `stripe-webhook.test.ts` |
+| Someone forges an admin session | The cookie is an HMAC over its own expiry, keyed on `ADMIN_PASSWORD`. Extending the expiry invalidates the signature. | `admin-auth.test.ts` |
+| Google API down while rendering availability | Fails **closed** — no slots shown. Losing a booking beats double-booking. | `calendar-failure.test.ts` |
+| Google token revoked | Booking pages switch to an "email me" fallback and you get an alert. A transient blip is told apart from a real revocation and does not flag you. | `google-auth.test.ts` |
+| DST / timezone drift | Everything is stored UTC; all wall-clock maths goes through Luxon in the host timezone. | `availability.test.ts` |
 
 Email and outbound webhooks are deliberately non-fatal — Google's own calendar invite is the
 primary confirmation channel, so a Resend outage cannot cost a booking.
@@ -179,15 +201,44 @@ primary confirmation channel, so a Resend outage cannot cost a booking.
 ## Commands
 
 ```bash
-npm run dev         # local dev
-npm run build       # prisma generate + next build
-npm run seed        # host row + starter meeting type
-npm test            # availability + DST unit tests
+npm run dev              # local dev
+npm run build            # prisma generate + next build
+npm run seed             # host row + starter meeting type
+npm run db:up            # Postgres via docker compose
+
 npm run typecheck
-npx prisma studio   # browse the database
+npm run lint
+npm test                 # unit + integration
+npm run test:integration # real Postgres; needs db:up
+npm run test:e2e         # Playwright against a production build
+npm run test:all         # everything, in the order CI runs it
+
+npx prisma studio        # browse the database
 ```
+
+No test needs a Google account, a Stripe account, or a network connection — see
+[CONTRIBUTING.md](CONTRIBUTING.md) for how that works, and for the guard that
+stops the suite running against your live keys.
+
+---
+
+## Adding a calendar backend
+
+Nothing outside `lib/google.ts` talks to Google. Everything goes through
+`calendar()` in `lib/calendar.ts`, which returns a `CalendarPort` — the Google
+one normally, an in-memory one for tests and the demo. Implement the interface,
+register it there, and the rest of the app is unchanged.
+
+## Mobile
+
+![The booking page on a phone](docs/screenshots/mobile.png)
 
 ## Not included
 
 Multi-host / round-robin, SMS reminders, group events, two-way calendar sync, waitlists.
-BookKit is deliberately a solo-operator tool.
+BookKit is deliberately a solo-operator tool. If you need those,
+[Cal.com](https://cal.com) is open source and does them well.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).

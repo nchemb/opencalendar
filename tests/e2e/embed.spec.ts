@@ -109,6 +109,30 @@ test.describe("widget.js", () => {
     await expect(page.locator("[data-theme='light']")).toBeVisible();
   });
 
+  test("the light theme is actually readable", async ({ page }) => {
+    // Regression: <html> is data-theme="dark", so a light subtree redefined the
+    // tokens but kept inheriting body's near-white color. Headings and slot
+    // buttons rendered white-on-white; only elements that set a colour class
+    // explicitly survived.
+    await page.goto(`/embed/${E2E.free}?theme=light`);
+    await page.locator('[data-testid="bk-day"][data-open="1"]').first().click();
+    await expect(page.locator('[data-testid="bk-slot"]').first()).toBeVisible();
+
+    /** Rough perceived lightness, 0 (black) to 255 (white). */
+    const luminance = (rgb: string) => {
+      const [r, g, b] = rgb.match(/\d+/g)!.map(Number);
+      return 0.299 * r + 0.587 * g + 0.114 * b;
+    };
+
+    for (const target of ['[data-testid="bk-slot"]', "h1, h2"]) {
+      const color = await page
+        .locator(target)
+        .first()
+        .evaluate((el) => getComputedStyle(el).color);
+      expect(luminance(color), `${target} is ${color} on a light background`).toBeLessThan(140);
+    }
+  });
+
   test("the embed page is marked noindex", async ({ page }) => {
     await page.goto(`/embed/${E2E.free}`);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute(

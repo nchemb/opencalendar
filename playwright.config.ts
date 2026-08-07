@@ -33,9 +33,20 @@ export default defineConfig({
     {
       name: "desktop",
       use: { ...devices["Desktop Chrome"] },
-      testIgnore: /mobile\.spec\.ts/,
+      testIgnore: [/mobile\.spec\.ts/, /screenshots\.spec\.ts/],
     },
     { name: "mobile", use: { ...devices["Pixel 7"] }, testMatch: /mobile\.spec\.ts/ },
+    // Opt-in via `npm run screenshots`. Writes docs/screenshots/*.png rather
+    // than asserting anything, so it stays out of the normal run and CI.
+    ...(process.env.SCREENSHOTS
+      ? [
+          {
+            name: "screenshots",
+            use: { ...devices["Desktop Chrome"] },
+            testMatch: /screenshots\.spec\.ts/,
+          },
+        ]
+      : []),
   ],
 
   webServer: {

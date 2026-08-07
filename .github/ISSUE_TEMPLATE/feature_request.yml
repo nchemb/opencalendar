@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest something BookKit should do
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        BookKit is deliberately small. Multi-host, round-robin, SMS reminders,
+        group events, two-way sync and waitlists are out of scope on purpose —
+        see [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md#scope).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that BookKit makes hard today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: Roughly what would this look like?
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: How you work around it now
+    validations:
+      required: false
