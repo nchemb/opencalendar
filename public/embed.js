@@ -86,7 +86,7 @@
       // it Safari sizes the iframe to its content's layout viewport, not the container.
       ".bk-popup-iframe{width:1px;min-width:100%;height:640px;border:0;display:block;background:transparent;" +
       "transition:height .15s ease;visibility:hidden}" +
-      ".bk-close{position:sticky;top:10px;float:right;margin:10px 10px 0 0;width:32px;height:32px;border:0;z-index:2;" +
+      ".bk-close{position:sticky;top:10px;float:right;margin:10px 10px -42px 0;width:32px;height:32px;border:0;z-index:2;" +
       "border-radius:999px;background:rgba(20,20,22,.9);color:#fff;font-size:19px;line-height:1;" +
       "cursor:pointer;display:flex;align-items:center;justify-content:center}" +
       ".bk-close:hover{background:rgba(40,40,44,.95)}" +
@@ -293,9 +293,10 @@
     close.innerHTML = "&times;";
     close.onclick = closePopup;
 
+    // Close goes first so it sticks top-right (negative bottom margin: takes no height).
+    modal.appendChild(close);
     modal.appendChild(skeleton);
     modal.appendChild(frame);
-    modal.appendChild(close);
     overlay.appendChild(modal);
 
     overlay.addEventListener("mousedown", function (e) {
@@ -351,7 +352,8 @@
       /* not loaded yet: the view is counted when it is */
     }
 
-    st.close.focus();
+    st.overlay.firstChild.scrollTop = 0;
+    st.close.focus({ preventScroll: true });
     return { close: closePopup, embedId: st.embedId };
   }
 
