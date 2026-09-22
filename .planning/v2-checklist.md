@@ -13,18 +13,18 @@ Spec: docs/REQUIREMENTS.md. Tick as done. Branch: v2 (bookkit repo).
 - [x] Tests: unit + integration for all of the above; v1 tests still green
 
 ## Surfaces
-- [ ] Public booking page redesign (month grid, tz picker, 12/24h, a11y, prefill, UTM, dark/light, brand)
-- [ ] Brand profile pages + OG images
-- [ ] Success page w/ add-to-calendar; cancel + reschedule pages
-- [ ] embed.js v2 (popup/inline/badge/API/events/UTM passthrough/Calendly drop-in) + React file
-- [ ] Admin: bookings (tabs, detail, audit, no-show, cancel/reschedule, retry), event type editor, schedules editor, brands, settings (calendars, email, webhooks, API keys, alerts), share panel (snippets, QR), analytics, CSV, needs-attention
-- [ ] REST API v1 + OpenAPI + MCP endpoint
-- [ ] Webhook endpoints (HMAC signed, retries, log)
+- [x] Public booking page redesign (month grid, tz picker, 12/24h, a11y, prefill, UTM, dark/light, brand)
+- [x] Brand profile pages + OG images
+- [x] Success page w/ add-to-calendar; cancel + reschedule pages
+- [x] embed.js v2 (popup/inline/badge/API/events/UTM passthrough/Calendly drop-in) + React file
+- [x] Admin: bookings (tabs, detail, audit, no-show, cancel/reschedule, retry), event type editor, schedules editor, brands, settings (calendars, email, webhooks, API keys, alerts), share panel (snippets, QR), analytics, CSV, needs-attention
+- [x] REST API v1 + OpenAPI + MCP endpoint
+- [x] Webhook endpoints (HMAC signed, retries, log)
 
 ## OSS / rollout
 - [x] npm run setup, env validation, Docker, README + docs (embed, migrate from Calendly), import:calendly
-- [ ] E2E Playwright green; CI green
-- [ ] Seed owner config (M1); buildwithneej + alphaflow local branches swapped to BookKit; previews served
+- [x] E2E Playwright green; CI green
+- [x] Seed owner config (M1) locally via import:calendly; buildwithneej + alphaflow branches swapped; previews served (prod load = owner step, LAUNCH.md)
 
 ## Notes
 - 184 tests green (unit + integration on real Postgres) as of commit 81224f9.
