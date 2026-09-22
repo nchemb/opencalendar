@@ -31,3 +31,4 @@ Spec: docs/REQUIREMENTS.md. Tick as done. Branch: v2 (bookkit repo).
 - Found + fixed a v1 bug: unpaid-hold sweeps used `{ not: "paid" }`, which excludes NULL → a hold that died before payment started burned its slot forever.
 - Site swaps committed (not pushed): buildwithneej `bookkit-v2-swap` (.claude/worktrees/bookkit-v2), alphaflow `bookkit-v2-swap` (../alphaflow-bookkit-v2).
 - Public UI, admin UI, integrations being built in worktrees ../bookkit-{public-ui,admin-ui,integrations}.
+- Known flake (seen once, 2026-09-22, under heavy local load): 4 outbox/email tests in v2-booking.test.ts failed together; passed on 3 reruns. If it recurs, suspect INLINE_DRAIN_MS budget vs slow DB.
