@@ -84,6 +84,7 @@ model Schedule {
   weeklyHours Json
   // [{ "date": "2026-12-24", "ranges": [] }]  empty ranges = unavailable all day
   overrides   Json @default("[]")
+  // One per host: partial unique index "Schedule_one_default_per_host" (raw SQL migration).
   isDefault   Boolean @default(false)
 
   meetingTypes MeetingType[]

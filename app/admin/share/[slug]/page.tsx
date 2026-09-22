@@ -16,7 +16,7 @@ export default async function SharePage({ params }: { params: { slug: string } }
         <p className="text-[var(--bk-muted)] text-sm">/{mt.slug}</p>
       </div>
       <div className="bk-card p-5">
-        <SharePanel baseUrl={appUrl()} slug={mt.slug} color={mt.color} displayMode={mt.displayMode} brandSlug={mt.brand?.slug} />
+        <SharePanel baseUrl={appUrl()} slug={mt.slug} color={mt.brand?.accentColor || mt.color} displayMode={mt.displayMode} brandSlug={mt.brand?.slug} />
       </div>
     </div>
   );

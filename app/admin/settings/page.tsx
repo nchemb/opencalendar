@@ -46,7 +46,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: { g
     { key: "STRIPE_WEBHOOK_SECRET", ok: Boolean(env("STRIPE_WEBHOOK_SECRET")), required: false },
     { key: "RESEND_API_KEY", ok: hasResend(), required: false },
     { key: "RESEND_FROM", ok: Boolean(env("RESEND_FROM")), required: false },
-    { key: "ALERT_EMAIL", ok: Boolean(env("ALERT_EMAIL")), required: true },
+    { key: "ALERT_EMAIL", ok: Boolean(env("ALERT_EMAIL")), required: false },
     { key: "ALERT_WEBHOOK_URL", ok: Boolean(env("ALERT_WEBHOOK_URL")), required: false },
     { key: "CRON_SECRET", ok: Boolean(env("CRON_SECRET")), required: false },
     { key: "NEXT_PUBLIC_APP_URL", ok: Boolean(env("NEXT_PUBLIC_APP_URL")), required: false },
@@ -131,7 +131,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: { g
 
       <section className="bk-card p-5">
         <h2 className="font-semibold mb-1">Webhook endpoints</h2>
-        <p className="text-sm text-[var(--bk-muted)] mb-4">Signed HMAC-SHA256 deliveries on booking events, with retry and a delivery log.</p>
+        <p className="text-sm text-[var(--bk-muted)] mb-4">Signed HMAC-SHA256 deliveries on booking events, with retries. The last delivery status shows on each endpoint.</p>
         <WebhookEndpoints
           endpoints={webhookRows.map((w) => ({ id: w.id, url: w.url, events: w.events, active: w.active, lastStatus: w.lastStatus, lastDeliveredAt: w.lastDeliveredAt?.toISOString() ?? null }))}
           allEvents={WEBHOOK_EVENTS}
