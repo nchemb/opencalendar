@@ -16,7 +16,7 @@ import { randomBytes } from "node:crypto";
 import { Prisma, type Booking, type Host, type MeetingType, type SingleUseLink } from "@prisma/client";
 import { DateTime } from "luxon";
 import { prisma } from "./db";
-import { appUrl, isDemoMode } from "./env";
+import { appUrl, calendarBackend, isDemoMode } from "./env";
 import {
   isSlotOnGrid,
   liveBookingStatusFilter,
@@ -95,6 +95,8 @@ export async function requireHost(): Promise<Host> {
 
 /** True when bookings cannot currently be taken (calendar not connected / revoked). */
 export function hostBookingBlocked(host: Host): boolean {
+  // The in-memory calendar (demo instance, tests, local UI work) needs no OAuth.
+  if (calendarBackend() === "memory") return false;
   return !host.googleRefreshToken || Boolean(host.googleAuthError);
 }
 
