@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/auth";
+import { adminSession } from "@/lib/auth";
+import { resolveAlert } from "@/lib/alerts";
+import { drainJobs } from "@/lib/jobs";
 import { prisma } from "@/lib/db";
 import { appUrl, env } from "@/lib/env";
 import { exchangeCode } from "@/lib/google";
@@ -17,7 +19,7 @@ function back(status: string, detail?: string) {
 
 /** GET /api/google/callback — stores the refresh token on the single host row. */
 export async function GET(req: Request) {
-  if (!isAdmin()) return back("error", "Admin session expired — log in and try again.");
+  if (!(await adminSession())) return back("error", "Admin session expired — log in and try again.");
 
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
@@ -45,18 +47,26 @@ export async function GET(req: Request) {
       googleRefreshToken: tokens.refresh_token!,
       googleAccessToken: tokens.access_token ?? null,
       googleTokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-      googleCalendarId: "primary",
       googleConnectedAt: new Date(),
       googleAuthError: null,
     };
 
     if (existing) {
+      // Keep the chosen destination/conflict calendars across reconnects.
       await prisma.host.update({ where: { id: existing.id }, data });
     } else {
       await prisma.host.create({
         data: { ...data, timezone: env("HOST_TIMEZONE") || "America/Chicago" },
       });
     }
+
+    // Back online: close the alert and let anything that waited on the calendar run now.
+    await resolveAlert("google_disconnected");
+    await prisma.job.updateMany({
+      where: { doneAt: null, kind: { startsWith: "calendar." } },
+      data: { deadAt: null, runAt: new Date(), lockedUntil: null },
+    });
+    await drainJobs({ budgetMs: 8_000 }).catch(() => undefined);
 
     log.info("google", "connected", { email });
     return back("connected");

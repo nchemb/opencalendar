@@ -1,4 +1,4 @@
-import { checkPassword, clearSessionCookie, isAdmin, issueSessionCookie } from "@/lib/auth";
+import { adminSession, checkPassword, clearSessionCookie, issueSessionCookie, revokeAllSessions } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { clientIp, fail, ok, readJson } from "@/lib/http";
 import { log } from "@/lib/logger";
@@ -7,7 +7,7 @@ import { rateLimit } from "@/lib/rate-limit";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return ok({ authenticated: isAdmin() });
+  return ok({ authenticated: await adminSession() });
 }
 
 /** POST /api/admin/session — password login. */
@@ -28,13 +28,15 @@ export async function POST(req: Request) {
     return fail("Incorrect password.", 401, "BAD_PASSWORD");
   }
 
-  issueSessionCookie();
+  await issueSessionCookie();
   log.info("admin", "login_ok", { ip });
   return ok({ authenticated: true });
 }
 
 /** DELETE /api/admin/session — logout. */
-export async function DELETE() {
+export async function DELETE(req: Request) {
+  // ?all=1 signs out every device (e.g. after a lost laptop).
+  if (new URL(req.url).searchParams.get("all") === "1" && (await adminSession())) await revokeAllSessions();
   clearSessionCookie();
   return ok({ authenticated: false });
 }

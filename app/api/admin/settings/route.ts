@@ -1,4 +1,4 @@
-import { isAdmin } from "@/lib/auth";
+import { adminSession } from "@/lib/auth";
 import { getHost } from "@/lib/booking";
 import { prisma } from "@/lib/db";
 import { fail, ok, readJson } from "@/lib/http";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 /** POST /api/admin/settings — outbound webhook config + host profile. */
 export async function POST(req: Request) {
-  if (!isAdmin()) return fail("Not authorized.", 401, "UNAUTHORIZED");
+  if (!(await adminSession())) return fail("Not authorized.", 401, "UNAUTHORIZED");
 
   const body = await readJson<Record<string, unknown>>(req);
   if (!body) return fail("Invalid request body.", 400, "BAD_BODY");

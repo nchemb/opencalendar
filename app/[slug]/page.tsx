@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import BookingFlow from "@/components/booking/BookingFlow";
 import { env } from "@/lib/env";
-import { findActiveMeetingType, hostBookingBlocked, toPublic } from "@/lib/meeting-types";
+import { findActiveMeetingType, toPublic } from "@/lib/meeting-types";
+import { hostBookingBlocked } from "@/lib/booking";
 
 export const dynamic = "force-dynamic";
 

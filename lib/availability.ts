@@ -1,164 +1,75 @@
 import { DateTime } from "luxon";
-import type { Host, MeetingType } from "@prisma/client";
+import type { Brand, Host, MeetingType, Schedule } from "@prisma/client";
 import { prisma } from "./db";
 import { calendar } from "./calendar";
 import type { BusyInterval } from "./calendar-types";
-import { parseWeeklyHours, toMinutes, type WeeklyHours } from "./types";
+import { parseOverrides, parseWeeklyHours } from "./types";
+import {
+  explainSlots,
+  generateSlots,
+  isOnGrid,
+  subtractInterval,
+  weekKey,
+  windowBounds,
+  type ExplainedSlot,
+  type SlotRules,
+  type WindowSpec,
+} from "./slots";
 
-export type SlotInput = {
-  weeklyHours: WeeklyHours;
-  hostTimezone: string;
-  durationMinutes: number;
-  bufferMinutes: number;
-  /** Window to generate within (UTC). */
-  rangeStart: Date;
-  rangeEnd: Date;
-  now: Date;
-  minNoticeHours: number;
-  daysInAdvance: number;
-  dailyLimit?: number | null;
-  busy: BusyInterval[];
-  /** Live bookings per host-local ISO date (yyyy-MM-dd), for dailyLimit. */
-  dayCounts?: Map<string, number>;
-};
+export type MeetingTypeFull = MeetingType & { schedule: Schedule | null; brand: Brand | null };
 
-/**
- * Pure slot generator. All wall-clock math runs through Luxon in the host timezone,
- * so DST transitions shift the UTC instants automatically; output is always UTC.
- */
-export function generateSlots(input: SlotInput): Date[] {
-  const {
-    weeklyHours,
-    hostTimezone,
-    durationMinutes,
-    bufferMinutes,
-    rangeStart,
-    rangeEnd,
-    now,
-    minNoticeHours,
-    daysInAdvance,
-    dailyLimit,
-    busy,
-    dayCounts,
-  } = input;
+export const meetingTypeInclude = { schedule: true, brand: true } as const;
 
-  if (durationMinutes <= 0) return [];
-
-  const earliestMs = Math.max(
-    rangeStart.getTime(),
-    now.getTime() + minNoticeHours * 3_600_000
-  );
-  const latestMs = Math.min(
-    rangeEnd.getTime(),
-    now.getTime() + daysInAdvance * 86_400_000
-  );
-  if (earliestMs >= latestMs) return [];
-
-  const bufferMs = Math.max(0, bufferMinutes) * 60_000;
-  const durationMs = durationMinutes * 60_000;
-
-  // Walk host-local calendar days covering the window (pad a day each side so a
-  // window that starts mid-day still sees that day's earlier ranges).
-  let day = DateTime.fromMillis(earliestMs, { zone: hostTimezone })
-    .startOf("day")
-    .minus({ days: 1 });
-  const lastDay = DateTime.fromMillis(latestMs, { zone: hostTimezone })
-    .startOf("day")
-    .plus({ days: 1 });
-
-  const slots: Date[] = [];
-  let guard = 0;
-
-  while (day <= lastDay && guard++ < 400) {
-    const weekdayKey = String(day.weekday === 7 ? 0 : day.weekday); // Luxon: 1=Mon..7=Sun
-    const ranges = weeklyHours[weekdayKey] ?? [];
-    const dateKey = day.toFormat("yyyy-MM-dd");
-
-    const usedToday = dayCounts?.get(dateKey) ?? 0;
-    const limitReached = typeof dailyLimit === "number" && dailyLimit > 0 && usedToday >= dailyLimit;
-
-    if (!limitReached) {
-      for (const range of ranges) {
-        const startMin = toMinutes(range.start);
-        const endMin = toMinutes(range.end);
-        if (endMin <= startMin) continue;
-
-        const windowStart = day.plus({ minutes: startMin });
-        const windowEnd = day.plus({ minutes: endMin });
-
-        let cursor = windowStart;
-        let innerGuard = 0;
-
-        while (cursor.plus({ minutes: durationMinutes }) <= windowEnd && innerGuard++ < 500) {
-          const slotStartMs = cursor.toMillis();
-          const slotEndMs = slotStartMs + durationMs;
-
-          const inWindow = slotStartMs >= earliestMs && slotStartMs <= latestMs;
-
-          if (inWindow) {
-            const guardStart = slotStartMs - bufferMs;
-            const guardEnd = slotEndMs + bufferMs;
-            const blocked = busy.some(
-              (b) => b.start.getTime() < guardEnd && b.end.getTime() > guardStart
-            );
-            if (!blocked) slots.push(new Date(slotStartMs));
-          }
-
-          cursor = cursor.plus({ minutes: durationMinutes });
-        }
-      }
-    }
-
-    day = day.plus({ days: 1 });
+export function windowSpec(mt: MeetingType): WindowSpec {
+  switch (mt.windowType) {
+    case "BUSINESS_DAYS":
+      return { type: "BUSINESS_DAYS", days: mt.daysInAdvance };
+    case "DATE_RANGE":
+      return mt.windowStart && mt.windowEnd
+        ? { type: "DATE_RANGE", start: mt.windowStart, end: mt.windowEnd }
+        : { type: "CALENDAR_DAYS", days: mt.daysInAdvance };
+    case "INDEFINITE":
+      return { type: "INDEFINITE" };
+    default:
+      return { type: "CALENDAR_DAYS", days: mt.daysInAdvance };
   }
-
-  slots.sort((a, b) => a.getTime() - b.getTime());
-  return slots;
 }
 
-/**
- * Pure check: does this instant land on the meeting type's published slot grid and
- * satisfy min-notice / days-in-advance? No IO, so it is safe inside a transaction.
- */
-export function isSlotOnGrid(
-  meetingType: Pick<
-    MeetingType,
-    | "weeklyHours"
-    | "durationMinutes"
-    | "bufferMinutes"
-    | "minNoticeHours"
-    | "daysInAdvance"
-  >,
-  hostTimezone: string,
-  startTime: Date,
-  now = new Date()
-): boolean {
-  const endTime = new Date(startTime.getTime() + meetingType.durationMinutes * 60_000);
-  const slots = generateSlots({
-    weeklyHours: parseWeeklyHours(meetingType.weeklyHours),
-    hostTimezone,
-    durationMinutes: meetingType.durationMinutes,
-    bufferMinutes: meetingType.bufferMinutes,
-    rangeStart: new Date(startTime.getTime() - 60_000),
-    rangeEnd: new Date(endTime.getTime() + 60_000),
-    now,
-    minNoticeHours: meetingType.minNoticeHours,
-    daysInAdvance: meetingType.daysInAdvance,
-    dailyLimit: null,
-    busy: [],
-  });
-  return slots.some((s) => s.getTime() === startTime.getTime());
+/** The schedule timezone governs slot math; the host timezone is the fallback. */
+export function scheduleTimezone(mt: MeetingTypeFull, host: Host): string {
+  return mt.schedule?.timezone || host.timezone;
+}
+
+export function slotRules(mt: MeetingTypeFull, host: Host, durationMinutes?: number): SlotRules {
+  return {
+    timezone: scheduleTimezone(mt, host),
+    weeklyHours: parseWeeklyHours(mt.schedule ? mt.schedule.weeklyHours : mt.weeklyHours),
+    overrides: mt.schedule ? parseOverrides(mt.schedule.overrides) : [],
+    durationMinutes: durationMinutes ?? mt.durationMinutes,
+    incrementMinutes: mt.startIncrementMinutes,
+    bufferBeforeMinutes: mt.bufferBeforeMinutes,
+    bufferAfterMinutes: mt.bufferAfterMinutes,
+    minNoticeMinutes: mt.minNoticeMinutes,
+    window: windowSpec(mt),
+    dailyLimit: mt.dailyLimit,
+    weeklyLimit: mt.weeklyLimit,
+  };
+}
+
+/** Null when bookable; otherwise the message to show instead of a calendar. */
+export function pausedMessage(host: Host, now = new Date()): string | null {
+  if (!host.paused) return null;
+  if (host.pausedUntil && host.pausedUntil.getTime() <= now.getTime()) return null;
+  return host.pausedMessage?.trim() || "Not taking new bookings right now. Check back soon.";
 }
 
 /**
  * What counts as a booking that owns its slot.
  *
  * A hold is live until it expires — except a paid one, which owns the slot no
- * matter how long settlement takes. Losing that case would hand someone else a
- * slot the first booker has already been charged for.
- *
- * Every read path and the booking transaction share this definition on purpose:
- * when they drifted apart, a slot could read as free and then fail to insert.
+ * matter how long settlement takes. Every read path and the booking transaction
+ * share this definition on purpose: when they drift apart, a slot can read as
+ * free and then fail to insert.
  */
 export function liveBookingStatusFilter(now: Date) {
   return [
@@ -182,124 +93,188 @@ export async function liveBookingIntervals(
       ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
       startTime: { lt: rangeEnd },
       endTime: { gt: rangeStart },
-      // Unexpired holds, plus paid-but-not-yet-settled ones. Expired unpaid
-      // holds are lazily treated as free.
       OR: liveBookingStatusFilter(now),
     },
     select: { startTime: true, endTime: true },
   });
-  return rows.map((r) => ({ start: r.startTime, end: r.endTime }));
+  return rows.map((r) => ({ start: r.startTime, end: r.endTime, source: "booking" as const }));
 }
 
-/** Per host-local-day counts of live bookings of one meeting type (for dailyLimit). */
-export async function dailyBookingCounts(
+/** Live bookings of one type, bucketed per schedule-local day and ISO week (for limits). */
+export async function typeCounts(
   meetingTypeId: string,
-  hostTimezone: string,
+  timezone: string,
   rangeStart: Date,
   rangeEnd: Date,
   now = new Date(),
-  excludeBookingId?: string
-): Promise<Map<string, number>> {
-  const rows = await prisma.booking.findMany({
+  excludeBookingId?: string,
+  client: Pick<typeof prisma, "booking"> = prisma
+): Promise<{ dayCounts: Map<string, number>; weekCounts: Map<string, number> }> {
+  // Widen to whole weeks so a weekly limit counts bookings outside the visible range.
+  const from = DateTime.fromJSDate(rangeStart, { zone: timezone }).startOf("week").toJSDate();
+  const to = DateTime.fromJSDate(rangeEnd, { zone: timezone }).endOf("week").toJSDate();
+  const rows = await client.booking.findMany({
     where: {
       meetingTypeId,
       ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
-      startTime: { gte: rangeStart, lt: rangeEnd },
+      startTime: { gte: from, lte: to },
       OR: liveBookingStatusFilter(now),
     },
     select: { startTime: true },
   });
-
-  const counts = new Map<string, number>();
+  const dayCounts = new Map<string, number>();
+  const weekCounts = new Map<string, number>();
   for (const r of rows) {
-    const key = DateTime.fromJSDate(r.startTime, { zone: hostTimezone }).toFormat("yyyy-MM-dd");
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const dt = DateTime.fromJSDate(r.startTime, { zone: timezone });
+    const d = dt.toFormat("yyyy-MM-dd");
+    const w = weekKey(dt);
+    dayCounts.set(d, (dayCounts.get(d) ?? 0) + 1);
+    weekCounts.set(w, (weekCounts.get(w) ?? 0) + 1);
   }
-  return counts;
+  return { dayCounts, weekCounts };
 }
 
-/**
- * Full availability for a window. Throws if Google freebusy fails — callers MUST
- * fail closed (show no slots) rather than risk a double booking.
- */
-export async function getAvailability(
+/** Clamp a requested range to the bookable window so we never query Google for nothing. */
+export function clampToWindow(rules: SlotRules, rangeStart: Date, rangeEnd: Date, now: Date) {
+  const bounds = windowBounds(rules.window, rules.timezone, now);
+  if (!bounds) return null;
+  const start = Math.max(rangeStart.getTime(), now.getTime());
+  const end = Math.min(rangeEnd.getTime(), bounds.last.endOf("day").toMillis());
+  if (end <= start) return null;
+  return { start: new Date(start), end: new Date(end) };
+}
+
+type Inputs = {
+  rules: SlotRules;
+  busy: BusyInterval[];
+  dayCounts: Map<string, number>;
+  weekCounts: Map<string, number>;
+};
+
+async function gatherInputs(
   host: Host,
-  meetingType: MeetingType,
+  mt: MeetingTypeFull,
+  durationMinutes: number | undefined,
   rangeStart: Date,
   rangeEnd: Date,
-  now = new Date()
-): Promise<Date[]> {
-  // Pad the freebusy query by the buffer so events just outside the window still block.
-  const pad = (meetingType.bufferMinutes + meetingType.durationMinutes) * 60_000;
+  now: Date,
+  excludeBookingId?: string,
+  excludeInterval?: BusyInterval
+): Promise<Inputs> {
+  const rules = slotRules(mt, host, durationMinutes);
+  const pad = (rules.bufferBeforeMinutes + rules.bufferAfterMinutes + rules.durationMinutes) * 60_000;
   const queryStart = new Date(rangeStart.getTime() - pad);
   const queryEnd = new Date(rangeEnd.getTime() + pad);
 
-  const [googleBusy, dbBusy, dayCounts] = await Promise.all([
+  const [googleBusy, dbBusy, counts] = await Promise.all([
     calendar().freeBusy(host, queryStart, queryEnd),
-    liveBookingIntervals(host.id, queryStart, queryEnd, now),
-    dailyBookingCounts(meetingType.id, host.timezone, queryStart, queryEnd, now),
+    liveBookingIntervals(host.id, queryStart, queryEnd, now, excludeBookingId),
+    typeCounts(mt.id, rules.timezone, queryStart, queryEnd, now, excludeBookingId),
   ]);
 
-  return generateSlots({
-    weeklyHours: parseWeeklyHours(meetingType.weeklyHours),
-    hostTimezone: host.timezone,
-    durationMinutes: meetingType.durationMinutes,
-    bufferMinutes: meetingType.bufferMinutes,
-    rangeStart,
-    rangeEnd,
-    now,
-    minNoticeHours: meetingType.minNoticeHours,
-    daysInAdvance: meetingType.daysInAdvance,
-    dailyLimit: meetingType.dailyLimit,
-    busy: [...googleBusy, ...dbBusy],
-    dayCounts,
-  });
+  const cal = excludeInterval ? subtractInterval(googleBusy, excludeInterval) : googleBusy;
+  return { rules, busy: [...cal, ...dbBusy], ...counts };
 }
 
 /**
- * Is this exact instant a legal, currently-open slot? Used before creating any booking
- * so the API cannot be driven off-grid (e.g. 3:07am on a Sunday).
+ * Open slots for a window. Throws if the calendar can't be read — callers MUST fail
+ * closed (show no slots) rather than risk a double booking.
+ */
+export async function getAvailability(
+  host: Host,
+  mt: MeetingTypeFull,
+  rangeStart: Date,
+  rangeEnd: Date,
+  opts: { now?: Date; durationMinutes?: number } = {}
+): Promise<Date[]> {
+  const now = opts.now ?? new Date();
+  if (pausedMessage(host, now)) return [];
+  const rules = slotRules(mt, host, opts.durationMinutes);
+  const clamped = clampToWindow(rules, rangeStart, rangeEnd, now);
+  if (!clamped) return [];
+
+  const inputs = await gatherInputs(host, mt, opts.durationMinutes, clamped.start, clamped.end, now);
+  return generateSlots(inputs.rules, {
+    now,
+    rangeStart: clamped.start,
+    rangeEnd: clamped.end,
+    busy: inputs.busy,
+    dayCounts: inputs.dayCounts,
+    weekCounts: inputs.weekCounts,
+  });
+}
+
+/** Admin troubleshooter: every candidate slot on one day with the reason it is or isn't offered. */
+export async function explainDay(
+  host: Host,
+  mt: MeetingTypeFull,
+  date: string,
+  opts: { now?: Date; durationMinutes?: number } = {}
+): Promise<ExplainedSlot[]> {
+  const now = opts.now ?? new Date();
+  const rules = slotRules(mt, host, opts.durationMinutes);
+  const day = DateTime.fromISO(date, { zone: rules.timezone }).startOf("day");
+  if (!day.isValid) return [];
+  const rangeStart = day.toJSDate();
+  const rangeEnd = day.plus({ days: 1 }).toJSDate();
+  const inputs = await gatherInputs(host, mt, opts.durationMinutes, rangeStart, rangeEnd, now);
+  return explainSlots(inputs.rules, {
+    now,
+    rangeStart,
+    rangeEnd,
+    busy: inputs.busy,
+    dayCounts: inputs.dayCounts,
+    weekCounts: inputs.weekCounts,
+    paused: Boolean(pausedMessage(host, now)),
+  });
+}
+
+/** Pure grid check (no IO) — safe to call inside the booking transaction. */
+export function isSlotOnGrid(
+  mt: MeetingTypeFull,
+  host: Host,
+  startTime: Date,
+  now = new Date(),
+  durationMinutes?: number
+): boolean {
+  return isOnGrid(slotRules(mt, host, durationMinutes), startTime, now);
+}
+
+/**
+ * Is this exact instant a legal, currently-open slot? `exclude` lets a reschedule
+ * ignore the booking being moved (its own DB row and its own calendar event).
  */
 export async function isSlotOpen(
   host: Host,
-  meetingType: MeetingType,
+  mt: MeetingTypeFull,
   startTime: Date,
-  now = new Date(),
-  excludeBookingId?: string
+  opts: {
+    now?: Date;
+    durationMinutes?: number;
+    excludeBookingId?: string;
+    excludeInterval?: BusyInterval;
+  } = {}
 ): Promise<boolean> {
-  const endTime = new Date(startTime.getTime() + meetingType.durationMinutes * 60_000);
-  const pad = (meetingType.bufferMinutes + meetingType.durationMinutes) * 60_000;
-  const queryStart = new Date(startTime.getTime() - pad);
-  const queryEnd = new Date(endTime.getTime() + pad);
-
-  const [googleBusy, dbBusy, dayCounts] = await Promise.all([
-    calendar().freeBusy(host, queryStart, queryEnd),
-    liveBookingIntervals(host.id, queryStart, queryEnd, now, excludeBookingId),
-    dailyBookingCounts(
-      meetingType.id,
-      host.timezone,
-      queryStart,
-      queryEnd,
-      now,
-      excludeBookingId
-    ),
-  ]);
-
-  const slots = generateSlots({
-    weeklyHours: parseWeeklyHours(meetingType.weeklyHours),
-    hostTimezone: host.timezone,
-    durationMinutes: meetingType.durationMinutes,
-    bufferMinutes: meetingType.bufferMinutes,
-    // Generate only around the candidate instant.
-    rangeStart: new Date(startTime.getTime() - 60_000),
-    rangeEnd: new Date(endTime.getTime() + 60_000),
+  const now = opts.now ?? new Date();
+  if (pausedMessage(host, now)) return false;
+  const rangeStart = new Date(startTime.getTime() - 60_000);
+  const rangeEnd = new Date(startTime.getTime() + 60_000);
+  const inputs = await gatherInputs(
+    host,
+    mt,
+    opts.durationMinutes,
+    rangeStart,
+    rangeEnd,
     now,
-    minNoticeHours: meetingType.minNoticeHours,
-    daysInAdvance: meetingType.daysInAdvance,
-    dailyLimit: meetingType.dailyLimit,
-    busy: [...googleBusy, ...dbBusy],
-    dayCounts,
-  });
-
-  return slots.some((s) => s.getTime() === startTime.getTime());
+    opts.excludeBookingId,
+    opts.excludeInterval
+  );
+  return generateSlots(inputs.rules, {
+    now,
+    rangeStart,
+    rangeEnd,
+    busy: inputs.busy,
+    dayCounts: inputs.dayCounts,
+    weekCounts: inputs.weekCounts,
+  }).some((s) => s.getTime() === startTime.getTime());
 }

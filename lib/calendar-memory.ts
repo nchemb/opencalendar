@@ -19,6 +19,8 @@ import {
   type CalendarPort,
   type CreateEventArgs,
   type CreatedEvent,
+  type RemoteEvent,
+  type UpdateEventArgs,
 } from "./calendar-types";
 
 type MemoryEvent = {
@@ -28,6 +30,7 @@ type MemoryEvent = {
   end: Date;
   summary: string;
   attendeeEmail: string;
+  guestEmails: string[];
 };
 
 type Faults = {
@@ -39,6 +42,8 @@ type Faults = {
   authError: Error | null;
   /** Every deleteEvent call throws until cleared. */
   deleteError: Error | null;
+  /** Every updateEvent call throws until cleared. */
+  updateError: Error | null;
 };
 
 const events = new Map<string, MemoryEvent>();
@@ -51,6 +56,7 @@ const faults: Faults = {
   freeBusyError: null,
   authError: null,
   deleteError: null,
+  updateError: null,
 };
 
 function overlaps(a: BusyInterval, start: Date, end: Date): boolean {
@@ -62,7 +68,12 @@ export const memoryCalendar: CalendarPort = {
     if (faults.authError) throw faults.authError;
     if (faults.freeBusyError) throw faults.freeBusyError;
 
-    const own = [...events.values()].map((e) => ({ start: e.start, end: e.end }));
+    const own = [...events.values()].map((e) => ({
+      start: e.start,
+      end: e.end,
+      source: "calendar" as const,
+      calendarId: "primary",
+    }));
     return [...externalBusy, ...own].filter((b) => overlaps(b, timeMin, timeMax));
   },
 
@@ -90,6 +101,7 @@ export const memoryCalendar: CalendarPort = {
         end: args.endTime,
         summary: args.summary,
         attendeeEmail: args.attendeeEmail,
+        guestEmails: args.guestEmails ?? [],
       });
       return {
         eventId,
@@ -101,10 +113,33 @@ export const memoryCalendar: CalendarPort = {
     throw new GoogleApiError("event insert failed: injected fault");
   },
 
+  async updateEvent(_host: Host, eventId: string, args: UpdateEventArgs): Promise<void> {
+    if (faults.authError) throw faults.authError;
+    if (faults.updateError) throw faults.updateError;
+    const e = events.get(eventId);
+    if (!e) throw new GoogleApiError("event update failed: not found");
+    e.start = args.startTime;
+    e.end = args.endTime;
+  },
+
   async deleteEvent(_host: Host, eventId: string): Promise<void> {
     if (faults.authError) throw faults.authError;
     if (faults.deleteError) throw faults.deleteError;
     events.delete(eventId); // already gone is success
+  },
+
+  async getEvent(_host: Host, eventId: string): Promise<RemoteEvent | null> {
+    if (faults.authError) throw faults.authError;
+    const e = events.get(eventId);
+    return e ? { eventId, start: e.start, end: e.end, cancelled: false } : null;
+  },
+
+  async listCalendars() {
+    if (faults.authError) throw faults.authError;
+    return [
+      { id: "primary", summary: "Primary", primary: true },
+      { id: "personal@example.test", summary: "Personal", primary: false },
+    ];
   },
 };
 
@@ -120,6 +155,7 @@ export const memoryCalendarControl = {
     faults.freeBusyError = null;
     faults.authError = null;
     faults.deleteError = null;
+    faults.updateError = null;
   },
 
   /** Simulate events the host added by hand outside BookKit. */
@@ -144,6 +180,22 @@ export const memoryCalendarControl = {
 
   breakDelete(err: Error = new GoogleApiError("event delete failed: injected fault")) {
     faults.deleteError = err;
+  },
+
+  breakUpdate(err: Error = new GoogleApiError("event update failed: injected fault")) {
+    faults.updateError = err;
+  },
+
+  /** Simulate the host deleting or moving an event by hand in Google. */
+  deleteExternally(eventId: string) {
+    events.delete(eventId);
+  },
+  moveExternally(eventId: string, start: Date, end: Date) {
+    const e = events.get(eventId);
+    if (e) {
+      e.start = start;
+      e.end = end;
+    }
   },
 
   listEvents(): MemoryEvent[] {

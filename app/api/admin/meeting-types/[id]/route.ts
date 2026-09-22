@@ -1,4 +1,4 @@
-import { isAdmin } from "@/lib/auth";
+import { adminSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { fail, ok, readJson } from "@/lib/http";
 import { errorMessage, log } from "@/lib/logger";
@@ -7,7 +7,7 @@ import { ValidationError, parseMeetingTypeInput } from "@/lib/meeting-type-input
 export const dynamic = "force-dynamic";
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  if (!isAdmin()) return fail("Not authorized.", 401, "UNAUTHORIZED");
+  if (!(await adminSession())) return fail("Not authorized.", 401, "UNAUTHORIZED");
 
   const body = await readJson<Record<string, unknown>>(req);
   if (!body) return fail("Invalid request body.", 400, "BAD_BODY");
@@ -34,7 +34,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  if (!isAdmin()) return fail("Not authorized.", 401, "UNAUTHORIZED");
+  if (!(await adminSession())) return fail("Not authorized.", 401, "UNAUTHORIZED");
 
   const live = await prisma.booking.count({
     where: { meetingTypeId: params.id, status: { in: ["CONFIRMED", "PENDING_PAYMENT"] } },

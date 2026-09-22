@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { env } from "./env";
+import { prisma } from "./db";
 
 const COOKIE = "bookkit_admin";
 const MAX_AGE_SEC = 60 * 60 * 24 * 14; // 14 days
@@ -9,8 +10,14 @@ function secret(): string | undefined {
   return env("ADMIN_PASSWORD");
 }
 
-function sign(expiresAt: number, key: string): string {
-  return createHmac("sha256", key).update(`admin.${expiresAt}`).digest("hex");
+function sign(expiresAt: number, version: number, key: string): string {
+  return createHmac("sha256", key).update(`admin.${expiresAt}.${version}`).digest("hex");
+}
+
+/** Bumping the host's sessionVersion invalidates every issued admin cookie. */
+async function currentVersion(): Promise<number> {
+  const host = await prisma.host.findFirst({ orderBy: { createdAt: "asc" }, select: { sessionVersion: true } });
+  return host?.sessionVersion ?? 1;
 }
 
 function safeEqual(a: string, b: string): boolean {
@@ -28,11 +35,12 @@ export function checkPassword(candidate: unknown): boolean {
   return safeEqual(h(candidate), h(key));
 }
 
-export function issueSessionCookie() {
+export async function issueSessionCookie() {
   const key = secret();
   if (!key) throw new Error("ADMIN_PASSWORD is not set");
   const expiresAt = Date.now() + MAX_AGE_SEC * 1000;
-  cookies().set(COOKIE, `${expiresAt}.${sign(expiresAt, key)}`, {
+  const version = await currentVersion();
+  cookies().set(COOKIE, `${expiresAt}.${version}.${sign(expiresAt, version, key)}`, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -45,25 +53,27 @@ export function clearSessionCookie() {
   cookies().set(COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
 }
 
-export function isAdmin(): boolean {
+/**
+ * Async on purpose: the session version lives in the DB. The old sync `isAdmin()`
+ * is gone so a forgotten `await` cannot silently pass as truthy.
+ */
+export async function adminSession(): Promise<boolean> {
   const key = secret();
   if (!key) return false;
 
   const raw = cookies().get(COOKIE)?.value;
   if (!raw) return false;
 
-  const [expiresRaw, sig] = raw.split(".");
+  const [expiresRaw, versionRaw, sig] = raw.split(".");
   const expiresAt = Number(expiresRaw);
-  if (!Number.isFinite(expiresAt) || expiresAt < Date.now() || !sig) return false;
-
-  return safeEqual(sig, sign(expiresAt, key));
+  const version = Number(versionRaw);
+  if (!Number.isFinite(expiresAt) || expiresAt < Date.now() || !Number.isInteger(version) || !sig) return false;
+  if (!safeEqual(sig, sign(expiresAt, version, key))) return false;
+  return version === (await currentVersion());
 }
 
-/** Throwing guard for admin API routes. */
-export function assertAdmin(): void {
-  if (!isAdmin()) {
-    const err = new Error("Not authorized") as Error & { status?: number };
-    err.status = 401;
-    throw err;
-  }
+/** Sign out every device. */
+export async function revokeAllSessions(): Promise<void> {
+  const host = await prisma.host.findFirst({ orderBy: { createdAt: "asc" } });
+  if (host) await prisma.host.update({ where: { id: host.id }, data: { sessionVersion: { increment: 1 } } });
 }

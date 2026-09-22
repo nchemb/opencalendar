@@ -1,4 +1,4 @@
-import { isAdmin } from "@/lib/auth";
+import { adminSession } from "@/lib/auth";
 import { cancelBooking, retryFailedBooking } from "@/lib/booking";
 import { prisma } from "@/lib/db";
 import { fail, ok, readJson } from "@/lib/http";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 /** POST /api/admin/bookings/[id] — { action: "cancel" | "retry" } */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  if (!isAdmin()) return fail("Not authorized.", 401, "UNAUTHORIZED");
+  if (!(await adminSession())) return fail("Not authorized.", 401, "UNAUTHORIZED");
 
   const body = await readJson<{ action?: unknown }>(req);
   const action = body?.action;
@@ -28,15 +28,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }
 
   if (action === "cancel") {
-    const booking = await prisma.booking.findUnique({
-      where: { id: params.id },
-      include: { meetingType: true, host: true },
-    });
+    const booking = await prisma.booking.findUnique({ where: { id: params.id } });
     if (!booking) return fail("Booking not found.", 404, "NOT_FOUND");
     if (booking.status === "CANCELLED") return ok({ status: "CANCELLED" });
 
     try {
-      const result = await cancelBooking(booking, "host");
+      const result = await cancelBooking(booking.id, "host");
       return ok({ status: result.booking.status, calendarRemoved: result.calendarRemoved });
     } catch (err) {
       log.error("admin", "cancel_failed", { id: params.id, error: errorMessage(err) });

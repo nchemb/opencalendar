@@ -17,7 +17,18 @@ export type MailArgs = {
   html: string;
   text: string;
   replyTo?: string;
+  /** Display name for the From header (e.g. the brand). The address stays RESEND_FROM's. */
+  fromName?: string;
+  attachments?: { filename: string; content: string; contentType?: string }[];
 };
+
+/** "Name <addr>" with the display name swapped, keeping the configured address. */
+export function withFromName(from: string, name?: string): string {
+  if (!name) return from;
+  const addr = from.match(/<([^>]+)>/)?.[1] ?? from.trim();
+  const safe = name.replace(/["<>\r\n]/g, "").slice(0, 60);
+  return `"${safe}" <${addr}>`;
+}
 
 /**
  * Send via Resend. Never throws — email is a nice-to-have next to the Google invite.
@@ -34,7 +45,16 @@ export async function sendMail(args: MailArgs): Promise<boolean> {
 
   try {
     const res = await r.emails.send({
-      from,
+      from: withFromName(from, args.fromName),
+      ...(args.attachments?.length
+        ? {
+            attachments: args.attachments.map((a) => ({
+              filename: a.filename,
+              content: Buffer.from(a.content).toString("base64"),
+              ...(a.contentType ? { contentType: a.contentType } : {}),
+            })),
+          }
+        : {}),
       to: args.to,
       subject: args.subject,
       html: args.html,
@@ -59,17 +79,31 @@ export async function sendMail(args: MailArgs): Promise<boolean> {
   }
 }
 
-/** Minimal, client-safe HTML shell. Paragraphs only — never hard-wrap mid-paragraph. */
-export function emailShell(bodyHtml: string): string {
-  return `<!doctype html><html><body style="margin:0;padding:24px;background:#0b0b0c;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
-  <div style="max-width:520px;margin:0 auto;background:#141416;border:1px solid #26262a;border-radius:14px;padding:28px;color:#e8e8ea;line-height:1.6;font-size:15px;">
+/** Minimal, client-safe HTML shell. Light, readable in every mail client and in dark mode. */
+export function emailShell(bodyHtml: string, footerHtml = ""): string {
+  return `<!doctype html><html><head><meta name="color-scheme" content="light only"></head><body style="margin:0;padding:24px 12px;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <div style="max-width:540px;margin:0 auto;background:#ffffff;border:1px solid #e4e4e7;border-radius:14px;padding:28px;color:#18181b;line-height:1.6;font-size:15px;">
     ${bodyHtml}
   </div>
+  ${footerHtml ? `<div style="max-width:540px;margin:14px auto 0;color:#71717a;font-size:12px;line-height:1.5;text-align:center">${footerHtml}</div>` : ""}
 </body></html>`;
 }
 
-export function button(href: string, label: string, color = "#FF6A00"): string {
-  return `<a href="${href}" style="display:inline-block;background:${color};color:#0b0b0c;font-weight:600;text-decoration:none;padding:11px 18px;border-radius:9px;">${label}</a>`;
+export function button(href: string, label: string, color = "#18181b"): string {
+  return `<a href="${href}" style="display:inline-block;background:${color};color:${readableOn(color)};font-weight:600;text-decoration:none;padding:11px 18px;border-radius:9px;">${escapeHtml(label)}</a>`;
+}
+
+/** Black or white text, whichever reads better on the given hex background. */
+export function readableOn(hex: string): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return "#ffffff";
+  const n = parseInt(m[1], 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  });
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return lum > 0.4 ? "#111111" : "#ffffff";
 }
 
 export function escapeHtml(s: string): string {

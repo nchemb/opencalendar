@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { isAdmin } from "@/lib/auth";
+import { adminSession } from "@/lib/auth";
 import LoginForm from "./LoginForm";
 import LogoutButton from "./LogoutButton";
 
@@ -14,8 +14,8 @@ const NAV = [
   { href: "/admin/settings", label: "Settings" },
 ];
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  if (!isAdmin()) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  if (!(await adminSession())) {
     return (
       <main className="min-h-dvh grid place-items-center px-4">
         <LoginForm />

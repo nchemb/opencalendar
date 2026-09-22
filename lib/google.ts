@@ -8,9 +8,12 @@ import {
   GoogleApiError,
   GoogleAuthError,
   type BusyInterval,
+  type CalendarListEntry,
   type CalendarPort,
   type CreateEventArgs,
   type CreatedEvent,
+  type RemoteEvent,
+  type UpdateEventArgs,
 } from "./calendar-types";
 
 // Re-exported so existing importers of "@/lib/google" keep working. New code
@@ -21,6 +24,8 @@ export type { BusyInterval, CreatedEvent };
 export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.freebusy",
+  // Lets the host pick which of their calendars block availability.
+  "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
 ];
 
 export function oauthClient() {
@@ -128,33 +133,50 @@ export async function markGoogleDisconnected(host: Host, reason: string) {
   await sendGoogleDisconnectedAlert(host, reason);
 }
 
-/** Busy blocks on the host calendar. Throws on failure — callers must fail closed. */
+/** Every calendar whose busy time blocks availability: the destination plus any extras. */
+export function conflictCalendars(host: Host): string[] {
+  const dest = host.googleCalendarId || "primary";
+  return [...new Set([dest, ...(host.conflictCalendarIds ?? [])])];
+}
+
+/**
+ * Busy blocks across every conflict calendar, merged. Throws on any failure —
+ * including an error for a single calendar — so callers fail closed: one
+ * unreadable calendar is exactly how a double booking would slip through.
+ */
 export async function freeBusy(
   host: Host,
   timeMin: Date,
   timeMax: Date
 ): Promise<BusyInterval[]> {
   const calendar = await calendarClient(host);
-  const calendarId = host.googleCalendarId || "primary";
+  const ids = conflictCalendars(host);
 
   try {
     const res = await calendar.freebusy.query({
       requestBody: {
         timeMin: timeMin.toISOString(),
         timeMax: timeMax.toISOString(),
-        items: [{ id: calendarId }],
+        items: ids.map((id) => ({ id })),
       },
     });
 
-    const cal = res.data.calendars?.[calendarId];
-    if (cal?.errors?.length) {
-      throw new GoogleApiError(
-        `freebusy: ${cal.errors.map((e) => e.reason).join(", ")}`
-      );
+    const out: BusyInterval[] = [];
+    for (const id of ids) {
+      const cal = res.data.calendars?.[id];
+      if (!cal) throw new GoogleApiError(`freebusy: no result for calendar ${id}`);
+      if (cal.errors?.length) {
+        throw new GoogleApiError(
+          `freebusy (${id}): ${cal.errors.map((e) => e.reason).join(", ")}`
+        );
+      }
+      for (const b of cal.busy ?? []) {
+        if (b.start && b.end) {
+          out.push({ start: new Date(b.start), end: new Date(b.end), source: "calendar", calendarId: id });
+        }
+      }
     }
-    return (cal?.busy ?? [])
-      .filter((b) => b.start && b.end)
-      .map((b) => ({ start: new Date(b.start!), end: new Date(b.end!) }));
+    return out;
   } catch (err) {
     if (err instanceof GoogleApiError || err instanceof GoogleAuthError) throw err;
     if (isAuthFailure(err)) {
@@ -163,6 +185,67 @@ export async function freeBusy(
     }
     throw new GoogleApiError(`freebusy failed: ${errorMessage(err)}`);
   }
+}
+
+async function wrap<T>(host: Host, what: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof GoogleApiError || err instanceof GoogleAuthError) throw err;
+    if (isAuthFailure(err)) {
+      await markGoogleDisconnected(host, errorMessage(err));
+      throw new GoogleAuthError("Google Calendar authorization has expired.");
+    }
+    throw new GoogleApiError(`${what} failed: ${errorMessage(err)}`);
+  }
+}
+
+export async function updateEvent(host: Host, eventId: string, args: UpdateEventArgs): Promise<void> {
+  const calendar = await calendarClient(host);
+  await wrap(host, "event update", () =>
+    calendar.events.patch({
+      calendarId: host.googleCalendarId || "primary",
+      eventId,
+      sendUpdates: "all",
+      requestBody: {
+        start: { dateTime: args.startTime.toISOString(), timeZone: "UTC" },
+        end: { dateTime: args.endTime.toISOString(), timeZone: "UTC" },
+        ...(args.summary ? { summary: args.summary } : {}),
+        ...(args.description ? { description: args.description } : {}),
+      },
+    })
+  );
+}
+
+export async function getEvent(host: Host, eventId: string): Promise<RemoteEvent | null> {
+  const calendar = await calendarClient(host);
+  try {
+    const res = await calendar.events.get({
+      calendarId: host.googleCalendarId || "primary",
+      eventId,
+    });
+    const e = res.data;
+    return {
+      eventId,
+      start: e.start?.dateTime ? new Date(e.start.dateTime) : null,
+      end: e.end?.dateTime ? new Date(e.end.dateTime) : null,
+      cancelled: e.status === "cancelled",
+    };
+  } catch (err) {
+    const code = (err as { code?: number })?.code;
+    if (code === 404 || code === 410) return null;
+    return wrap(host, "event get", () => Promise.reject(err));
+  }
+}
+
+export async function listCalendars(host: Host): Promise<CalendarListEntry[]> {
+  const calendar = await calendarClient(host);
+  const res = await wrap(host, "calendar list", () =>
+    calendar.calendarList.list({ minAccessRole: "freeBusyReader", maxResults: 250 })
+  );
+  return (res.data.items ?? [])
+    .filter((c) => c.id)
+    .map((c) => ({ id: c.id!, summary: c.summaryOverride || c.summary || c.id!, primary: Boolean(c.primary) }));
 }
 
 export async function createEvent(
@@ -181,14 +264,22 @@ export async function createEvent(
         description: args.description,
         start: { dateTime: args.startTime.toISOString(), timeZone: "UTC" },
         end: { dateTime: args.endTime.toISOString(), timeZone: "UTC" },
-        attendees: [{ email: args.attendeeEmail, displayName: args.attendeeName }],
+        attendees: [
+          { email: args.attendeeEmail, displayName: args.attendeeName },
+          ...(args.guestEmails ?? []).map((email) => ({ email })),
+        ],
         guestsCanModify: false,
-        conferenceData: {
-          createRequest: {
-            requestId: `bookkit-${args.bookingId}`,
-            conferenceSolutionKey: { type: "hangoutsMeet" },
-          },
-        },
+        ...(args.location ? { location: args.location } : {}),
+        ...(args.createMeet === false
+          ? {}
+          : {
+              conferenceData: {
+                createRequest: {
+                  requestId: `bookkit-${args.bookingId}`,
+                  conferenceSolutionKey: { type: "hangoutsMeet" },
+                },
+              },
+            }),
         extendedProperties: { private: { bookkitBookingId: args.bookingId } },
       },
     });
@@ -265,5 +356,8 @@ export async function createEventWithRetry(
 export const googleCalendar: CalendarPort = {
   freeBusy,
   createEventWithRetry,
+  updateEvent,
   deleteEvent,
+  getEvent,
+  listCalendars,
 };

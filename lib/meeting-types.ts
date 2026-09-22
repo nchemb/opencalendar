@@ -1,46 +1,68 @@
-import type { Host, MeetingType } from "@prisma/client";
+import type { Brand, Host } from "@prisma/client";
 import { prisma } from "./db";
-import { parseQuestions, type BookingQuestion, type PublicMeetingType } from "./types";
+import { meetingTypeInclude, type MeetingTypeFull } from "./availability";
+import {
+  durationChoices,
+  parseLocations,
+  parseQuestions,
+  type BookingQuestion,
+  type PublicBrand,
+  type PublicMeetingType,
+} from "./types";
 
 export async function findActiveMeetingType(
   slug: string
-): Promise<{ meetingType: MeetingType; host: Host } | null> {
-  const meetingType = await prisma.meetingType.findUnique({
+): Promise<{ meetingType: MeetingTypeFull; host: Host } | null> {
+  const row = await prisma.meetingType.findUnique({
     where: { slug },
-    include: { host: true },
+    include: { ...meetingTypeInclude, host: true },
   });
-  if (!meetingType || !meetingType.active) return null;
-  const { host, ...rest } = meetingType;
-  return { meetingType: rest as MeetingType, host };
+  if (!row || !row.active) return null;
+  const { host, ...meetingType } = row;
+  return { meetingType, host };
 }
 
-/** Questions list, falling back to the legacy single customQuestion. */
-export function questionsOf(meetingType: MeetingType): BookingQuestion[] {
-  const parsed = parseQuestions(meetingType.questions);
-  if (parsed.length) return parsed;
-  if (meetingType.customQuestion?.trim()) {
-    return [{ label: meetingType.customQuestion.trim(), required: false }];
-  }
-  return [];
+export function questionsOf(mt: { questions: unknown }): BookingQuestion[] {
+  return parseQuestions(mt.questions);
 }
 
-export function toPublic(meetingType: MeetingType, host: Host): PublicMeetingType {
+export function toPublicBrand(brand: Brand | null | undefined): PublicBrand | null {
+  if (!brand) return null;
   return {
-    slug: meetingType.slug,
-    name: meetingType.name,
-    description: meetingType.description,
-    durationMinutes: meetingType.durationMinutes,
-    priceCents: meetingType.priceCents,
-    currency: meetingType.currency,
-    color: meetingType.color,
-    questions: questionsOf(meetingType),
-    displayMode: meetingType.displayMode,
-    hostName: host.displayName || host.email,
-    hostTimezone: host.timezone,
+    slug: brand.slug,
+    name: brand.name,
+    tagline: brand.tagline,
+    logoUrl: brand.logoUrl,
+    accentColor: brand.accentColor,
+    theme: brand.theme === "light" || brand.theme === "dark" ? brand.theme : "auto",
+    websiteUrl: brand.websiteUrl,
+    showPoweredBy: brand.showPoweredBy,
   };
 }
 
-/** True when bookings cannot currently be taken (Google not connected / revoked). */
-export function hostBookingBlocked(host: Host): boolean {
-  return !host.googleRefreshToken || Boolean(host.googleAuthError);
+export function toPublic(mt: MeetingTypeFull, host: Host): PublicMeetingType {
+  return {
+    slug: mt.slug,
+    name: mt.name,
+    description: mt.description,
+    durationMinutes: mt.durationMinutes,
+    durations: durationChoices(mt),
+    priceCents: mt.priceCents,
+    currency: mt.currency,
+    color: mt.brand?.accentColor || mt.color,
+    questions: questionsOf(mt),
+    locations: parseLocations(mt.locations).map((l) =>
+      // The invitee's number is theirs to enter; never leak host-only values for that kind.
+      l.kind === "phone_invitee" ? { kind: l.kind, label: l.label ?? null } : l
+    ),
+    allowGuests: mt.allowGuests,
+    maxGuests: mt.maxGuests,
+    policyText: mt.policyText,
+    cancelCutoffHours: mt.cancelCutoffHours,
+    displayMode: mt.displayMode,
+    hostName: host.displayName || host.email.split("@")[0],
+    hostAvatarUrl: host.avatarUrl,
+    hostTimezone: mt.schedule?.timezone || host.timezone,
+    brand: toPublicBrand(mt.brand),
+  };
 }

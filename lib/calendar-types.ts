@@ -27,7 +27,13 @@ export class GoogleApiError extends Error {
   }
 }
 
-export type BusyInterval = { start: Date; end: Date };
+export type BusyInterval = {
+  start: Date;
+  end: Date;
+  /** Where the block came from, for the admin troubleshooter. */
+  source?: "calendar" | "booking";
+  calendarId?: string;
+};
 
 export type CreatedEvent = {
   eventId: string;
@@ -43,7 +49,29 @@ export type CreateEventArgs = {
   endTime: Date;
   attendeeEmail: string;
   attendeeName: string;
+  /** Extra invitees the booker added. */
+  guestEmails?: string[];
+  /** Free-text location (address, phone number, video link). */
+  location?: string | null;
+  /** Ask the calendar for a Google Meet link. Defaults to true. */
+  createMeet?: boolean;
 };
+
+export type UpdateEventArgs = {
+  startTime: Date;
+  endTime: Date;
+  summary?: string;
+  description?: string;
+};
+
+export type RemoteEvent = {
+  eventId: string;
+  start: Date | null;
+  end: Date | null;
+  cancelled: boolean;
+};
+
+export type CalendarListEntry = { id: string; summary: string; primary: boolean };
 
 export type CalendarPort = {
   /**
@@ -60,6 +88,15 @@ export type CalendarPort = {
     maxAttempts?: number
   ): Promise<CreatedEvent>;
 
+  /** Move an existing event (reschedule). Attendees are notified by the calendar. */
+  updateEvent(host: Host, eventId: string, args: UpdateEventArgs): Promise<void>;
+
   /** Remove the event. Already-gone counts as success. */
   deleteEvent(host: Host, eventId: string): Promise<void>;
+
+  /** Read an event back (reconcile). null = it no longer exists. */
+  getEvent(host: Host, eventId: string): Promise<RemoteEvent | null>;
+
+  /** Calendars on the connected account, for conflict-calendar selection. */
+  listCalendars(host: Host): Promise<CalendarListEntry[]>;
 };

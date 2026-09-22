@@ -24,6 +24,17 @@ model Host {
   googleCalendarId     String    @default("primary")
   googleConnectedAt    DateTime?
   googleAuthError      String? // set when the refresh token is rejected; cleared on reconnect
+  // Extra calendars (same Google account) whose busy time blocks availability.
+  // The destination calendar (googleCalendarId) is always checked too.
+  conflictCalendarIds  String[]  @default([])
+
+  // Pause switch: no slots are offered while paused (until pausedUntil, if set).
+  paused        Boolean   @default(false)
+  pausedUntil   DateTime?
+  pausedMessage String?
+
+  // Bumped to revoke every admin session at once.
+  sessionVersion Int @default(1)
 
   // Branding shown on public booking pages
   displayName String?
@@ -31,9 +42,61 @@ model Host {
 
   meetingTypes MeetingType[]
   bookings     Booking[]
+  brands       Brand[]
+  schedules    Schedule[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// A site or persona the host books under (e.g. "Build with Neej", "AlphaFlow").
+/// Owns branding and the public profile page at /u/<slug>.
+model Brand {
+  id     String @id @default(cuid())
+  hostId String
+  host   Host   @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  slug        String  @unique
+  name        String
+  tagline     String?
+  logoUrl     String?
+  accentColor String  @default("#FF6A00")
+  theme       String  @default("auto") // auto | light | dark
+  websiteUrl  String?
+  replyTo     String?
+  showPoweredBy Boolean @default(true)
+
+  meetingTypes MeetingType[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Reusable availability: weekly hours plus date-specific overrides, in one timezone.
+model Schedule {
+  id     String @id @default(cuid())
+  hostId String
+  host   Host   @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  name     String
+  timezone String
+  // { "0".."6": [{ "start": "09:00", "end": "17:00" }] }  (0 = Sunday)
+  weeklyHours Json
+  // [{ "date": "2026-12-24", "ranges": [] }]  empty ranges = unavailable all day
+  overrides   Json @default("[]")
+  isDefault   Boolean @default(false)
+
+  meetingTypes MeetingType[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum WindowType {
+  CALENDAR_DAYS
+  BUSINESS_DAYS
+  DATE_RANGE
+  INDEFINITE
 }
 
 enum DisplayMode {
@@ -45,34 +108,65 @@ model MeetingType {
   id     String @id @default(cuid())
   hostId String
   host   Host   @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  brandId    String?
+  brand      Brand?    @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  scheduleId String?
+  schedule   Schedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
 
   slug        String  @unique
   name        String
   description String?
 
   durationMinutes Int    @default(30)
+  // Extra durations the invitee can pick: [{ "minutes": 60, "priceCents": 9900 }]. Empty = fixed.
+  durationOptions Json?
   priceCents      Int? // null => free
   currency        String @default("usd")
   color           String @default("#FF6A00")
 
-  // Weekly availability, host-local wall-clock time.
-  // Shape: { "0".."6": [{ "start": "09:00", "end": "17:00" }, ...] }  (0 = Sunday)
-  weeklyHours Json
+  // Legacy per-type hours (host timezone). Used only when scheduleId is null.
+  weeklyHours Json?
 
-  daysInAdvance  Int  @default(30)
-  minNoticeHours Int  @default(12)
-  bufferMinutes  Int  @default(0)
-  dailyLimit     Int?
+  windowType            WindowType @default(CALENDAR_DAYS)
+  daysInAdvance         Int        @default(30)
+  windowStart           String? // yyyy-MM-dd, DATE_RANGE only
+  windowEnd             String?
+  minNoticeMinutes      Int        @default(720)
+  startIncrementMinutes Int? // null => duration
+  bufferBeforeMinutes   Int        @default(0)
+  bufferAfterMinutes    Int        @default(0)
+  dailyLimit            Int?
+  weeklyLimit           Int?
 
-  customQuestion String? // legacy single question — superseded by questions
-  // [{ "label": "What are you building?", "required": true }, ...] max 5
+  // [{ "kind": "google_meet" }, { "kind": "phone_invitee" }, { "kind": "in_person", "value": "..." }]
+  locations Json?
+
+  // [{ "id": "q1", "label": "...", "type": "long_text", "required": false, "options": [] }] max 10
   questions      Json?
-  redirectUrl    String?
+  allowGuests    Boolean @default(true)
+  maxGuests      Int     @default(10)
 
+  redirectUrl        String?
+  redirectPassParams Boolean @default(false)
+  confirmationNote   String?
+
+  // Invitee self-service cutoff (hours before start). null = any time before start.
+  cancelCutoffHours Int?
+  // "before_cutoff" | "always" | "never"  — automatic refund on invitee cancellation
+  refundPolicy      String  @default("before_cutoff")
+  policyText        String?
+
+  // Reminder offsets in minutes before start, e.g. [1440, 60]. Empty = none.
+  reminderMinutes Int[] @default([1440, 60])
+  followUpMinutes Int? // send follow-up this long after the end; null = off
+
+  secret      Boolean     @default(false)
   displayMode DisplayMode @default(popup)
   active      Boolean     @default(true)
+  position    Int         @default(0)
 
-  bookings Booking[]
+  bookings       Booking[]
+  singleUseLinks SingleUseLink[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -99,9 +193,15 @@ model Booking {
   name         String
   email        String
   timezone     String // booker's IANA zone — display only, never used in overlap math
-  customAnswer String? // display string of all answers (also legacy single answer)
-  // [{ "label": "...", "answer": "..." }, ...] aligned with meetingType.questions
+  customAnswer String? // display string of all answers
+  // [{ "id": "q1", "label": "...", "answer": "..." }]
   answers      Json?
+  guests       String[] @default([])
+  // { "kind": "google_meet", "value": null, "label": "Google Meet" }
+  location     Json?
+  // { "utm_source": "...", ..., "ref": "..." }
+  utm          Json?
+  singleUseLinkId String?
 
   // ALWAYS UTC
   startTime DateTime
@@ -130,8 +230,15 @@ model Booking {
   confirmationEmailError  String?
   webhookDeliveredAt      DateTime?
 
-  cancelToken String    @unique @default(cuid())
-  cancelledAt DateTime?
+  cancelToken  String    @unique @default(cuid())
+  cancelledAt  DateTime?
+  cancelledBy  String? // "invitee" | "host" | "system"
+  cancelReason String?
+  rescheduleCount   Int       @default(0)
+  previousStartTime DateTime?
+  noShow            Boolean   @default(false)
+
+  events BookingEvent[]
   expiresAt   DateTime? // pending-payment hold expiry
 
   createdAt DateTime @default(now())
@@ -150,4 +257,105 @@ model Setting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+/// Durable outbox. Every side effect (calendar write, email, webhook, reminder,
+/// refund) is a row here, retried with backoff until done or dead.
+model Job {
+  id          String    @id @default(cuid())
+  kind        String
+  bookingId   String?
+  payload     Json      @default("{}")
+  runAt       DateTime  @default(now())
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(8)
+  lockedUntil DateTime?
+  lastError   String?
+  doneAt      DateTime?
+  deadAt      DateTime?
+  // Set for jobs that must never run twice (e.g. "reminder:<booking>:<start>:<offset>").
+  dedupeKey   String?   @unique
+  createdAt   DateTime  @default(now())
+
+  @@index([doneAt, deadAt, runAt])
+  @@index([bookingId])
+}
+
+/// Append-only audit log per booking.
+model BookingEvent {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  type      String
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@index([bookingId, createdAt])
+}
+
+/// Things the host must see. Open alerts are deduped on openKey.
+model Alert {
+  id         String    @id @default(cuid())
+  kind       String
+  severity   String    // critical | warning | info
+  title      String
+  message    String
+  bookingId  String?
+  openKey    String?   @unique // set while open, cleared on resolve
+  count      Int       @default(1)
+  notifiedAt DateTime?
+  notifyError String?
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+
+  @@index([resolvedAt, createdAt])
+}
+
+model WebhookEndpoint {
+  id        String   @id @default(cuid())
+  url       String
+  secret    String
+  events    String[] @default([])  // empty = all
+  active    Boolean  @default(true)
+  lastStatus      Int?
+  lastDeliveredAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String
+  prefix     String
+  hash       String    @unique
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+/// One-off booking link that dies after a single booking.
+model SingleUseLink {
+  id              String      @id @default(cuid())
+  token           String      @unique
+  meetingTypeId   String
+  meetingType     MeetingType @relation(fields: [meetingTypeId], references: [id], onDelete: Cascade)
+  label           String?
+  durationMinutes Int?
+  priceCents      Int?  // null = type's price; 0 = free
+  expiresAt       DateTime?
+  usedAt          DateTime?
+  bookingId       String?
+  createdAt       DateTime    @default(now())
+}
+
+/// Privacy-friendly funnel counters (no cookies, no per-visitor rows).
+model AnalyticsDaily {
+  id            String @id @default(cuid())
+  day           String // yyyy-MM-dd (UTC)
+  meetingTypeId String
+  metric        String // view | slot | booked | cancelled | no_show
+  source        String @default("")
+  count         Int    @default(0)
+
+  @@unique([day, meetingTypeId, metric, source])
 }
