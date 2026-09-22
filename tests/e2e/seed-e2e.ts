@@ -4,16 +4,16 @@
  *
  *   DATABASE_URL=postgresql://…/bookkit_e2e npx tsx tests/e2e/seed-e2e.ts
  *
- * The same shape backs the hosted demo instance, so what a contributor clicks
- * through locally is what a stranger sees on the demo.
+ * v2 schema: MeetingType carries the window/buffer/limit fields, typed questions
+ * with ids, and an optional Brand. Weekly hours are wide open (00:00–23:59) so a
+ * slot always exists regardless of what time the suite happens to run.
  */
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-/** Every day 09:00–17:00 host-local, so a slot is always within a day or two. */
 const ALL_WEEK = Object.fromEntries(
-  ["0", "1", "2", "3", "4", "5", "6"].map((d) => [d, [{ start: "09:00", end: "17:00" }]])
+  ["0", "1", "2", "3", "4", "5", "6"].map((d) => [d, [{ start: "00:00", end: "23:59" }]])
 );
 
 export const E2E = {
@@ -24,11 +24,16 @@ export const E2E = {
   questions: "strategy-call",
   paid: "paid-consult",
   inactive: "archived-call",
+  multiDuration: "multi-duration",
+  cutoff: "cutoff-call",
+  secret: "secret-call",
+  brand: "e2e-brand",
+  brandName: "E2E Brand",
 };
 
 export async function seedE2E(): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "Booking", "MeetingType", "Host", "Setting" RESTART IDENTITY CASCADE'
+    'TRUNCATE TABLE "Booking", "MeetingType", "Brand", "Schedule", "Host", "Setting", "SingleUseLink" RESTART IDENTITY CASCADE'
   );
 
   const host = await prisma.host.create({
@@ -43,14 +48,25 @@ export async function seedE2E(): Promise<void> {
     },
   });
 
+  const brand = await prisma.brand.create({
+    data: {
+      hostId: host.id,
+      slug: E2E.brand,
+      name: E2E.brandName,
+      tagline: "Booked by robots, for now.",
+      accentColor: "#FF6A00",
+    },
+  });
+
   const common = {
     hostId: host.id,
     durationMinutes: 30,
     currency: "usd",
     weeklyHours: ALL_WEEK as object,
     daysInAdvance: 30,
-    minNoticeHours: 0,
-    bufferMinutes: 0,
+    minNoticeMinutes: 0,
+    bufferBeforeMinutes: 0,
+    bufferAfterMinutes: 0,
     active: true,
   };
 
@@ -63,6 +79,7 @@ export async function seedE2E(): Promise<void> {
         description: "A quick 30 minutes to work out whether this is a fit.",
         color: "#FF6A00",
         displayMode: "popup",
+        brandId: brand.id,
       },
       {
         ...common,
@@ -71,9 +88,13 @@ export async function seedE2E(): Promise<void> {
         description: "Bring a problem, leave with a plan.",
         color: "#4F8DFD",
         displayMode: "inline",
+        brandId: brand.id,
+        allowGuests: true,
+        maxGuests: 5,
+        locations: [{ kind: "google_meet" }, { kind: "phone_invitee" }] as object,
         questions: [
-          { label: "What are you building?", required: true },
-          { label: "Anything else?", required: false },
+          { id: "q1", label: "What are you building?", type: "long_text", required: true },
+          { id: "q2", label: "Anything else?", type: "short_text", required: false },
         ] as object,
       },
       {
@@ -92,6 +113,31 @@ export async function seedE2E(): Promise<void> {
         description: "No longer bookable.",
         color: "#888888",
         active: false,
+      },
+      {
+        ...common,
+        slug: E2E.multiDuration,
+        name: "Multi duration call",
+        description: "Pick 30 or 60 minutes.",
+        color: "#A855F7",
+        durationOptions: [{ minutes: 60, priceCents: null }] as object,
+      },
+      {
+        ...common,
+        slug: E2E.cutoff,
+        name: "Cutoff call",
+        description: "Cannot be changed close to the start time.",
+        color: "#EF4444",
+        cancelCutoffHours: 999_999,
+      },
+      {
+        ...common,
+        slug: E2E.secret,
+        name: "Secret call",
+        description: "Bookable by direct link only.",
+        color: "#111111",
+        secret: true,
+        brandId: brand.id,
       },
     ],
   });

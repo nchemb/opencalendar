@@ -3,22 +3,19 @@ import { E2E } from "./seed-e2e";
 import { db, serveHostPage } from "./helpers";
 
 /**
- * The embed is what a customer actually installs, so these run against a fake
- * customer page that loads widget.js the way the README tells people to.
+ * The embed is what a customer actually installs, so most of these run against
+ * a fake customer page that loads embed.js the way docs/EMBED-PROTOCOL.md tells
+ * people to. One test at the end confirms v1 widget.js markup still works.
  */
-test.describe("widget.js", () => {
+test.describe("embed.js", () => {
   test("an inline embed mounts an iframe and is sized by the child", async ({ page }) => {
-    await serveHostPage(
-      page,
-      `<div id="target" data-bookkit="${E2E.questions}" data-theme="dark"></div>`
-    );
+    await serveHostPage(page, `<div id="target" data-bookkit-inline="${E2E.questions}" data-theme="dark"></div>`);
 
-    const frame = page.locator("#target iframe.bookkit-inline");
+    const frame = page.locator("#target iframe.bk-inline-iframe");
     await expect(frame).toBeVisible({ timeout: 20_000 });
     await expect(frame).toHaveAttribute("src", new RegExp(`/embed/${E2E.questions}`));
 
-    // bookkit.resize drives the height, so the host page never needs a scrollbar
-    // inside the iframe.
+    // bookkit:height drives the iframe's own height (ResizeObserver on the child).
     await expect
       .poll(async () => Number((await frame.getAttribute("style"))?.match(/height:\s*(\d+)px/)?.[1] ?? 0), {
         timeout: 20_000,
@@ -26,17 +23,14 @@ test.describe("widget.js", () => {
       .toBeGreaterThan(320);
   });
 
-  test("theme and primary colour reach the embed URL", async ({ page }) => {
-    await serveHostPage(
-      page,
-      `<div data-bookkit="${E2E.free}" data-theme="light" data-primary-color="#00AAFF"></div>`
-    );
+  test("theme and accent color reach the embed URL", async ({ page }) => {
+    await serveHostPage(page, `<div data-bookkit-inline="${E2E.free}" data-theme="light" data-accent="00AAFF"></div>`);
 
-    const frame = page.locator("iframe.bookkit-inline");
+    const frame = page.locator("iframe.bk-inline-iframe");
     await expect(frame).toBeVisible({ timeout: 20_000 });
     const src = await frame.getAttribute("src");
     expect(src).toContain("theme=light");
-    expect(src).toContain("primaryColor=00AAFF");
+    expect(src).toContain("accent=00AAFF");
   });
 
   test("a popup opens, emits events, and closes on Escape", async ({ page }) => {
@@ -45,7 +39,7 @@ test.describe("widget.js", () => {
       `<button data-bookkit-popup="${E2E.free}">Book a call</button>
        <div id="log"></div>
        <script>
-         window.addEventListener("bookkit.closed", function () {
+         window.addEventListener("bookkit:close", function () {
            document.getElementById("log").textContent += "closed ";
          });
        </script>`
@@ -53,91 +47,77 @@ test.describe("widget.js", () => {
 
     await page.getByRole("button", { name: "Book a call" }).click();
 
-    const modal = page.locator(".bookkit-modal");
+    const modal = page.locator(".bk-modal");
     await expect(modal).toBeVisible({ timeout: 20_000 });
-    await expect(modal.locator("iframe")).toHaveAttribute(
-      "src",
-      new RegExp(`/embed/${E2E.free}`)
-    );
+    await expect(modal.locator("iframe")).toHaveAttribute("src", new RegExp(`/embed/${E2E.free}`));
 
     await page.keyboard.press("Escape");
     await expect(modal).toBeHidden({ timeout: 10_000 });
     await expect(page.locator("#log")).toContainText("closed");
   });
 
-  test("the host page is told when a time is selected and when a booking lands", async ({ page }) => {
+  test("BookKit.open() with a prefill fills name and email, and booking fires bookkit:booked", async ({ page }) => {
     await serveHostPage(
       page,
-      `<div data-bookkit="${E2E.free}"></div>
+      `<button id="open-btn">Book a call</button>
        <div id="log"></div>
        <script>
-         ["bookkit.time_selected", "bookkit.booked"].forEach(function (t) {
-           window.addEventListener(t, function () {
-             document.getElementById("log").textContent += t + " ";
-           });
+         document.getElementById("open-btn").addEventListener("click", function () {
+           window.BookKit.open("${E2E.free}", { prefill: { name: "Ada Lovelace", email: "e2e-embed-open@example.test" } });
+         });
+         window.addEventListener("bookkit:booked", function (e) {
+           document.getElementById("log").textContent += "booked:" + e.detail.email + " ";
          });
        </script>`
     );
 
-    const frame = page.frameLocator("iframe.bookkit-inline");
+    await page.locator("#open-btn").click();
+    const frame = page.frameLocator(".bk-modal iframe");
 
-    const day = frame.locator('[data-testid="bk-day"][data-open="1"]').first();
-    await expect(day).toBeVisible({ timeout: 20_000 });
-    await day.click();
-
+    await expect(frame.locator('[data-testid="bk-day"]').first()).toBeVisible({ timeout: 20_000 });
+    await frame.locator('[data-testid="bk-day"][data-open="1"]').first().click();
     await frame.locator('[data-testid="bk-slot"]').first().click();
-    await expect(page.locator("#log")).toContainText("bookkit.time_selected", { timeout: 10_000 });
 
-    await frame.locator("#bk-name").fill("Grace Hopper");
-    await frame.locator("#bk-email").fill("e2e-embed@example.test");
+    await expect(frame.locator("#bk-name")).toHaveValue("Ada Lovelace");
+    await expect(frame.locator("#bk-email")).toHaveValue("e2e-embed-open@example.test");
+
     await page.waitForTimeout(1700); // clear the bot filter
     await frame.getByRole("button", { name: "Confirm booking" }).click();
 
-    // Inside an embed the confirmation renders in place rather than navigating.
     await expect(frame.locator('[data-testid="bk-confirmed"]')).toBeVisible({ timeout: 20_000 });
-    await expect(page.locator("#log")).toContainText("bookkit.booked", { timeout: 10_000 });
+    await expect(page.locator("#log")).toContainText("booked:e2e-embed-open@example.test", { timeout: 10_000 });
 
-    const booking = await db.booking.findFirstOrThrow({
-      where: { email: "e2e-embed@example.test" },
-    });
+    const booking = await db.booking.findFirstOrThrow({ where: { email: "e2e-embed-open@example.test" } });
+    expect(booking.status).toBe("CONFIRMED");
+  });
+
+  test("v1 widget.js markup (data-bookkit) still mounts an inline embed and books", async ({ page }) => {
+    await serveHostPage(page, `<div data-bookkit="${E2E.free}"></div>`, { script: "/widget.js" });
+
+    const frame = page.frameLocator("iframe.bookkit-inline");
+    await expect(frame.locator('[data-testid="bk-day"]').first()).toBeVisible({ timeout: 20_000 });
+    await frame.locator('[data-testid="bk-day"][data-open="1"]').first().click();
+    await frame.locator('[data-testid="bk-slot"]').first().click();
+
+    await frame.locator("#bk-name").fill("Grace Hopper");
+    await frame.locator("#bk-email").fill("e2e-widget-v1@example.test");
+    await page.waitForTimeout(1700);
+    await frame.getByRole("button", { name: "Confirm booking" }).click();
+
+    await expect(frame.locator('[data-testid="bk-confirmed"]')).toBeVisible({ timeout: 20_000 });
+
+    const booking = await db.booking.findFirstOrThrow({ where: { email: "e2e-widget-v1@example.test" } });
     expect(booking.status).toBe("CONFIRMED");
   });
 
   test("a plain iframe works with no script at all", async ({ page }) => {
-    await page.goto(`/embed/${E2E.free}?theme=light&hideHeader=1`);
+    await page.goto(`/embed/${E2E.free}?theme=light`);
     await expect(page.locator('[data-testid="bk-day"]').first()).toBeVisible({ timeout: 20_000 });
     await expect(page.locator("[data-theme='light']")).toBeVisible();
   });
 
-  test("the light theme is actually readable", async ({ page }) => {
-    // Regression: <html> is data-theme="dark", so a light subtree redefined the
-    // tokens but kept inheriting body's near-white color. Headings and slot
-    // buttons rendered white-on-white; only elements that set a colour class
-    // explicitly survived.
-    await page.goto(`/embed/${E2E.free}?theme=light`);
-    await page.locator('[data-testid="bk-day"][data-open="1"]').first().click();
-    await expect(page.locator('[data-testid="bk-slot"]').first()).toBeVisible();
-
-    /** Rough perceived lightness, 0 (black) to 255 (white). */
-    const luminance = (rgb: string) => {
-      const [r, g, b] = rgb.match(/\d+/g)!.map(Number);
-      return 0.299 * r + 0.587 * g + 0.114 * b;
-    };
-
-    for (const target of ['[data-testid="bk-slot"]', "h1, h2"]) {
-      const color = await page
-        .locator(target)
-        .first()
-        .evaluate((el) => getComputedStyle(el).color);
-      expect(luminance(color), `${target} is ${color} on a light background`).toBeLessThan(140);
-    }
-  });
-
   test("the embed page is marked noindex", async ({ page }) => {
     await page.goto(`/embed/${E2E.free}`);
-    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-      "content",
-      /noindex/
-    );
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
   });
 });

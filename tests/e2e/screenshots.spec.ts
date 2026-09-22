@@ -50,7 +50,7 @@ test("booking form", async ({ page }) => {
   await expect(page.locator("#bk-name")).toBeVisible();
   await page.fill("#bk-name", "Ada Lovelace");
   await page.fill("#bk-email", "ada@example.com");
-  await page.fill("#bk-answer-0", "A self-hosted booking page for my consultancy.");
+  await page.fill("#bk-q-q1", "A self-hosted booking page for my consultancy.");
 
   await page.screenshot({ path: `${DIR}/booking-form.png` });
 });
@@ -61,10 +61,10 @@ test("inline embed on a customer site", async ({ page }) => {
     page,
     `<p style="max-width:60ch;color:#444">The picker below is an inline BookKit embed —
      one script tag and one div, sized to its own content.</p>
-     <div data-bookkit="${E2E.free}" data-theme="light" data-primary-color="#4F8DFD"></div>`
+     <div data-bookkit-inline="${E2E.free}" data-theme="light" data-accent="4F8DFD"></div>`
   );
 
-  const frame = page.frameLocator("iframe.bookkit-inline");
+  const frame = page.frameLocator("iframe.bk-inline-iframe");
   await expect(frame.locator('[data-testid="bk-day"]').first()).toBeVisible({ timeout: 20_000 });
   await frame.locator('[data-testid="bk-day"][data-open="1"]').first().click();
   await expect(frame.locator('[data-testid="bk-slot"]').first()).toBeVisible();
@@ -85,28 +85,28 @@ test("popup embed", async ({ page }) => {
   );
 
   await page.getByRole("button", { name: "Book a call" }).click();
-  const modal = page.locator(".bookkit-modal");
+  const modal = page.locator(".bk-modal");
   await expect(modal).toBeVisible({ timeout: 20_000 });
 
-  const frame = page.frameLocator(".bookkit-modal iframe");
+  const frame = page.frameLocator(".bk-modal iframe");
   await expect(frame.locator('[data-testid="bk-day"]').first()).toBeVisible({ timeout: 20_000 });
   await page.waitForTimeout(600);
 
   await page.screenshot({ path: `${DIR}/popup-embed.png` });
 });
 
-test("admin meeting types", async ({ page }) => {
+test("admin event types", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/admin");
   await page.locator("#pw").fill(E2E_ADMIN_PASSWORD);
   await page.getByRole("button", { name: "Log in" }).click();
-  await expect(page.getByRole("link", { name: "Meeting types" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("link", { name: "Event types" })).toBeVisible({ timeout: 20_000 });
 
-  await page.getByRole("link", { name: "Meeting types" }).click();
+  await page.getByRole("link", { name: "Event types" }).click();
   await page.waitForLoadState("networkidle");
-  await expect(page.getByRole("button", { name: "New meeting type" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "New event type" })).toBeVisible();
 
-  await page.screenshot({ path: `${DIR}/admin-meeting-types.png` });
+  await page.screenshot({ path: `${DIR}/admin-event-types.png` });
 });
 
 test("mobile booking page", async ({ page }) => {

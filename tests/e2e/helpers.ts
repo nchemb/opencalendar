@@ -44,7 +44,7 @@ export async function loginAsAdmin(page: Page): Promise<void> {
 
   // Login triggers a client-side refresh. Wait for the authenticated shell to
   // settle before navigating, or the next goto races it and aborts.
-  await expect(page.getByRole("link", { name: "Meeting types" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("link", { name: "Event types" })).toBeVisible({ timeout: 20_000 });
   await page.waitForLoadState("networkidle");
 }
 
@@ -55,17 +55,22 @@ export async function adminNavigate(page: Page, label: string): Promise<void> {
 }
 
 /**
- * Serves a fake customer site on the app's own origin, so widget.js loads and
- * its postMessage origin check passes without shipping a fixture in public/.
+ * Serves a fake customer site on the app's own origin, so embed.js (or v1
+ * widget.js, via `script`) loads and its postMessage origin check passes
+ * without shipping a fixture in public/.
  */
-export async function serveHostPage(page: Page, bodyHtml: string, path = "/__e2e/host"): Promise<void> {
+export async function serveHostPage(
+  page: Page,
+  bodyHtml: string,
+  { path = "/__e2e/host", script = "/embed.js" }: { path?: string; script?: string } = {}
+): Promise<void> {
   await page.route(`**${path}`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "text/html",
       body: `<!doctype html><html><head><meta charset="utf-8">
 <title>Customer site</title>
-<script src="/widget.js" defer></script>
+<script src="${script}" defer></script>
 </head><body style="margin:0;font-family:system-ui;background:#fff">
 <h1>A customer's website</h1>
 ${bodyHtml}
@@ -73,4 +78,9 @@ ${bodyHtml}
     });
   });
   await page.goto(path);
+}
+
+/** True when the document never needs to scroll sideways — the mobile layout's basic contract. */
+export async function hasNoHorizontalScroll(page: Page): Promise<boolean> {
+  return page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 }
