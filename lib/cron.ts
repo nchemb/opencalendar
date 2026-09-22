@@ -11,7 +11,7 @@ import { getAvailability, meetingTypeInclude, pausedMessage } from "./availabili
 import { calendar } from "./calendar";
 import { raiseAlert, resolveAlert } from "./alerts";
 import { getHost, hostBookingBlocked, syncPaymentFromStripe } from "./booking";
-import { appUrl, env, hasResend, isDemoMode } from "./env";
+import { appUrl, env, fakeCalendarInProduction, hasResend, isDemoMode } from "./env";
 import { stripeConfigured } from "./stripe";
 
 /**
@@ -80,6 +80,17 @@ export async function runCanary(): Promise<{ checked: number; problems: string[]
   const host = await getHost();
   const problems: string[] = [];
   if (!host) return { checked: 0, problems };
+
+  if (fakeCalendarInProduction()) {
+    await raiseAlert({
+      kind: "fake_calendar",
+      severity: "critical",
+      title: "BOOKKIT_CALENDAR=memory is set in production",
+      message: "Bookings are being written to an in-memory test calendar, not Google. Remove BOOKKIT_CALENDAR from your production environment and redeploy.",
+      key: "fake_calendar",
+    }, host);
+    problems.push("fake calendar in production");
+  }
 
   if (hostBookingBlocked(host)) {
     problems.push("calendar not connected");

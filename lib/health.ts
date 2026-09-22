@@ -1,7 +1,7 @@
 import { prisma } from "./db";
 import { getHost, hostBookingBlocked } from "./booking";
 import { lastTickAt } from "./cron";
-import { env, hasResend, isDemoMode } from "./env";
+import { env, fakeCalendarInProduction, hasResend, isDemoMode } from "./env";
 import { stripeConfigured, stripeKeyMismatch } from "./stripe";
 
 export type Check = { ok: boolean; detail: string };
@@ -23,6 +23,8 @@ export async function health(): Promise<Health> {
     checks.setup = { ok: false, detail: "no host row — run npm run setup" };
   } else if (isDemoMode()) {
     checks.calendar = { ok: true, detail: "demo mode (in-memory calendar)" };
+  } else if (fakeCalendarInProduction()) {
+    checks.calendar = { ok: false, detail: "BOOKKIT_CALENDAR=memory on a production deployment — bookings are NOT reaching your real calendar. Remove it." };
   } else {
     checks.calendar = hostBookingBlocked(host)
       ? { ok: false, detail: host.googleAuthError ? "Google rejected the connection — reconnect in /admin/settings" : "Google Calendar not connected" }

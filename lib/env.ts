@@ -46,3 +46,17 @@ export const hasGoogleOAuth = () =>
 export function googleRedirectUri(): string {
   return env("GOOGLE_REDIRECT_URI") || `${appUrl()}/api/google/callback`;
 }
+
+/**
+ * The in-memory calendar on a real production deployment means bookings "succeed"
+ * against a fake that vanishes on the next cold start. Health, the canary and the
+ * admin all shout when this is true. (E2E runs set BOOKKIT_E2E=1.)
+ */
+export function fakeCalendarInProduction(): boolean {
+  return (
+    process.env.NODE_ENV === "production" &&
+    !isDemoMode() &&
+    env("BOOKKIT_E2E") !== "1" &&
+    calendarBackend() === "memory"
+  );
+}

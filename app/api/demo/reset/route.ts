@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { resetDemoData } from "@/lib/demo";
 import { isDemoMode } from "@/lib/env";
 import { env } from "@/lib/env";
@@ -24,9 +25,11 @@ export async function POST(req: Request) {
   }
 
   // Vercel Cron sends its own bearer token; a manual call can use the header.
+  const same = (a: string | null, b: string) =>
+    a !== null && a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
   const authorized =
-    req.headers.get("x-bookkit-demo-secret") === secret ||
-    req.headers.get("authorization") === `Bearer ${secret}`;
+    same(req.headers.get("x-bookkit-demo-secret"), secret) ||
+    same(req.headers.get("authorization"), `Bearer ${secret}`);
 
   if (!authorized) {
     log.warn("demo", "reset_unauthorized");

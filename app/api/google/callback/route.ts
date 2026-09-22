@@ -6,6 +6,7 @@ import { drainJobs } from "@/lib/jobs";
 import { prisma } from "@/lib/db";
 import { appUrl, env } from "@/lib/env";
 import { exchangeCode } from "@/lib/google";
+import { sealToken } from "@/lib/secrets";
 import { errorMessage, log } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
@@ -44,8 +45,8 @@ export async function GET(req: Request) {
 
     const data = {
       email,
-      googleRefreshToken: tokens.refresh_token!,
-      googleAccessToken: tokens.access_token ?? null,
+      googleRefreshToken: sealToken(tokens.refresh_token)!,
+      googleAccessToken: sealToken(tokens.access_token),
       googleTokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
       googleConnectedAt: new Date(),
       googleAuthError: null,

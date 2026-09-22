@@ -3,6 +3,7 @@ import type { Host } from "@prisma/client";
 import { prisma } from "./db";
 import { env, googleRedirectUri, requireEnv } from "./env";
 import { errorMessage, log } from "./logger";
+import { openToken, sealToken } from "./secrets";
 
 import {
   GoogleApiError,
@@ -84,8 +85,8 @@ export async function calendarClient(host: Host): Promise<calendar_v3.Calendar> 
 
   const client = oauthClient();
   client.setCredentials({
-    refresh_token: host.googleRefreshToken,
-    access_token: host.googleAccessToken ?? undefined,
+    refresh_token: openToken(host.googleRefreshToken) ?? undefined,
+    access_token: openToken(host.googleAccessToken) ?? undefined,
     expiry_date: host.googleTokenExpiresAt?.getTime() ?? undefined,
   });
 
@@ -99,12 +100,12 @@ export async function calendarClient(host: Host): Promise<calendar_v3.Calendar> 
       await prisma.host.update({
         where: { id: host.id },
         data: {
-          googleAccessToken: credentials.access_token ?? null,
+          googleAccessToken: sealToken(credentials.access_token),
           googleTokenExpiresAt: credentials.expiry_date
             ? new Date(credentials.expiry_date)
             : null,
           ...(credentials.refresh_token
-            ? { googleRefreshToken: credentials.refresh_token }
+            ? { googleRefreshToken: sealToken(credentials.refresh_token) }
             : {}),
           googleAuthError: null,
         },

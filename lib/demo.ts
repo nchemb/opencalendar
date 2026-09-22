@@ -7,6 +7,7 @@
  * would fill up over a few days — hence the reset below.
  */
 import { prisma } from "./db";
+import { isDemoMode } from "./env";
 
 export const DEMO_HOST_EMAIL = "demo@bookkit.example";
 
@@ -57,6 +58,8 @@ const DEMO_TYPES = [
  * safe to run against a live demo — it only ever touches demo data.
  */
 export async function resetDemoData(): Promise<{ host: string; meetingTypes: number }> {
+  // The guarantee lives here, not only at call sites: this wipes every booking.
+  if (!isDemoMode()) throw new Error("resetDemoData refused: BOOKKIT_DEMO_MODE is not on.");
   await prisma.booking.deleteMany({});
 
   const host = await prisma.host.upsert({
