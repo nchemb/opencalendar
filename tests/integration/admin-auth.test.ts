@@ -33,7 +33,7 @@ import {
   GET as sessionStatus,
   POST as login,
 } from "../../app/api/admin/session/route";
-import { POST as createMeetingTypeRoute } from "../../app/api/admin/meeting-types/route";
+import { POST as createMeetingTypeRoute } from "../../app/api/admin/event-types/route";
 
 const COOKIE = "bookkit_admin";
 const PASSWORD = "test-admin-password";
@@ -181,7 +181,7 @@ describe("POST /api/admin/session", () => {
 
 describe("admin API routes reject anonymous callers", () => {
   function createRequest() {
-    return new Request("http://localhost:3000/api/admin/meeting-types", {
+    return new Request("http://localhost:3000/api/admin/event-types", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ slug: "sneaky", name: "Sneaky", durationMinutes: 30 }),

@@ -11,6 +11,7 @@
  * State is per-process and deliberately volatile. On the demo instance a
  * serverless cold start wiping the fake calendar is a feature, not a bug.
  */
+import { randomUUID } from "node:crypto";
 import type { Host } from "@prisma/client";
 import {
   GoogleApiError,
@@ -93,7 +94,7 @@ export const memoryCalendar: CalendarPort = {
         continue;
       }
 
-      const eventId = `mem-evt-${++seq}`;
+      const eventId = `mem-evt-${++seq}-${randomUUID().slice(0, 8)}`;
       events.set(eventId, {
         eventId,
         bookingId: args.bookingId,
