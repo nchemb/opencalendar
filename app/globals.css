@@ -12,9 +12,12 @@
   --bk-border: #2a2a30;
   --bk-danger: #ff5c5c;
   --bk-ok: #3ddc84;
+  /* Native controls (checkboxes, radios, selects, scrollbars) follow the theme. */
+  color-scheme: dark;
 }
 
 [data-theme="light"] {
+  color-scheme: light;
   --bk-accent-ink: #ffffff;
   --bk-bg: #ffffff;
   --bk-surface: #ffffff;
