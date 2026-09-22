@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { detectHour12 } from "@/lib/ui/format";
 
-const STORAGE_KEY = "bookkit.timezone";
+const TZ_KEY = "bookkit.timezone";
+const HOUR_KEY = "bookkit.hour12";
 
 export function detectTimezone(): string {
   try {
@@ -36,27 +38,30 @@ const FALLBACK_ZONES = [
   "UTC",
 ];
 
-export function useTimezone() {
-  // Start on the server-stable default, then swap after mount to avoid hydration drift.
+/** `initialTz` is a `?tz=` URL override (embed protocol); it wins over storage/detection once. */
+export function useTimezone(initialTz?: string | null) {
   const [timezone, setTimezoneState] = useState<string>("UTC");
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    let initial = detectTimezone();
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored) initial = stored;
-    } catch {
-      /* private mode */
+    let initial = initialTz || detectTimezone();
+    if (!initialTz) {
+      try {
+        const stored = window.localStorage.getItem(TZ_KEY);
+        if (stored) initial = stored;
+      } catch {
+        /* private mode */
+      }
     }
     setTimezoneState(initial);
     setReady(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function setTimezone(tz: string) {
     setTimezoneState(tz);
     try {
-      window.localStorage.setItem(STORAGE_KEY, tz);
+      window.localStorage.setItem(TZ_KEY, tz);
     } catch {
       /* ignore */
     }
@@ -65,18 +70,37 @@ export function useTimezone() {
   const zones = useMemo(() => {
     let list: string[] = [];
     try {
-      const supported = (
-        Intl as unknown as { supportedValuesOf?: (k: string) => string[] }
-      ).supportedValuesOf;
+      const supported = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf;
       if (typeof supported === "function") list = supported("timeZone");
     } catch {
       /* older browser */
     }
     if (!list.length) list = FALLBACK_ZONES;
     const detected = detectTimezone();
-    const merged = Array.from(new Set([detected, timezone, ...list])).filter(Boolean);
-    return merged;
+    return Array.from(new Set([detected, timezone, ...list])).filter(Boolean);
   }, [timezone]);
 
   return { timezone, setTimezone, zones, ready };
+}
+
+/** 12h/24h toggle, defaulted from the browser locale (D2) and remembered like the timezone. */
+export function useHourFormat() {
+  const [hour12, setHour12State] = useState(true);
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(HOUR_KEY);
+      setHour12State(stored ? stored === "12" : detectHour12());
+    } catch {
+      setHour12State(detectHour12());
+    }
+  }, []);
+  function setHour12(v: boolean) {
+    setHour12State(v);
+    try {
+      window.localStorage.setItem(HOUR_KEY, v ? "12" : "24");
+    } catch {
+      /* ignore */
+    }
+  }
+  return { hour12, setHour12 };
 }
