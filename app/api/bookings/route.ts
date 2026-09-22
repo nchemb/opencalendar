@@ -1,5 +1,6 @@
 import { createFreeBooking, priceFor, resolveDuration, resolveSingleUseLink, startPaidCheckout, startPaidIntent } from "@/lib/booking";
-import { parseBookingRequest, publicBooking } from "@/lib/booking-request";
+import { parseBookingRequest, publicBooking, publicRedirectFields } from "@/lib/booking-request";
+import { buildRedirectUrl } from "@/lib/ui/redirect";
 import { env } from "@/lib/env";
 import { bookingErrorResponse, clientIp, fail, ok, readJson } from "@/lib/http";
 import { errorMessage, log } from "@/lib/logger";
@@ -45,7 +46,11 @@ export async function POST(req: Request) {
 
     if (!amount) {
       const booking = await createFreeBooking(host, meetingType, input);
-      return ok({ booking: publicBooking(booking), redirectUrl: meetingType.redirectUrl || null });
+      const redirectUrl =
+        booking.status === "CONFIRMED" && meetingType.redirectUrl
+          ? buildRedirectUrl(meetingType.redirectUrl, meetingType.redirectPassParams, publicRedirectFields(booking))
+          : null;
+      return ok({ booking: publicBooking(booking), redirectUrl });
     }
 
     if (!stripeConfigured()) return fail("Payments are not configured on this instance.", 503, "STRIPE_NOT_CONFIGURED");

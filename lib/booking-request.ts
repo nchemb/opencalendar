@@ -105,3 +105,7 @@ export function publicBooking(b: {
     calendarPending: b.status === "CONFIRMED" && !b.googleEventId,
   };
 }
+
+export function publicRedirectFields(b: { id: string; name: string; email: string; startTime: Date; endTime: Date }) {
+  return { id: b.id, name: b.name, email: b.email, startTime: b.startTime.toISOString(), endTime: b.endTime.toISOString() };
+}

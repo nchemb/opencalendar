@@ -3,7 +3,6 @@
 import { DateTime } from "luxon";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BookingParams } from "@/lib/ui/params";
-import { buildRedirectUrl } from "@/lib/ui/redirect";
 import { money } from "@/lib/ui/format";
 import type { PublicMeetingType } from "@/lib/types";
 import { emitEmbed, useEmbedResize, useParentUtm, type EmbedCtx } from "@/lib/ui/embed";
@@ -111,11 +110,8 @@ export default function BookingWidget({
       { slug: mt.slug, bookingId: booking.id, startTime: booking.startTime, timezone: booking.timezone }
     );
     if (redirectUrl) {
-      // The public API never exposes MeetingType.redirectPassParams (lib/booking-request.ts:75,
-      // app/api/bookings/[id]/route.ts:37 only return { name, slug, redirectUrl }), so there is no
-      // way to read the host's per-type choice from the client. Always appending is the more
-      // useful default and matches what a redirect page needs to do anything with the booking.
-      const dest = buildRedirectUrl(redirectUrl, true, booking);
+      // The server already appended booking details iff the host enabled redirectPassParams.
+      const dest = redirectUrl;
       if (embed) window.open(dest, "_top");
       else window.location.href = dest;
       return;

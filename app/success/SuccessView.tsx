@@ -4,10 +4,9 @@ import { DateTime } from "luxon";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import Confirmation, { type ConfirmedBooking } from "@/components/booking/Confirmation";
-import { buildRedirectUrl } from "@/lib/ui/redirect";
 
 type Booking = ConfirmedBooking & { status: string };
-type MeetingTypeLite = { name: string; slug: string; redirectUrl: string | null };
+type MeetingTypeLite = { name: string; slug: string; redirectUrl: string | null; accentColor?: string };
 
 const MAX_ATTEMPTS = 40; // ~60s at 1.5s intervals
 
@@ -48,7 +47,7 @@ export default function SuccessView() {
         if (data.booking.status === "CONFIRMED") {
           if (data.meetingType?.redirectUrl && !redirected.current) {
             redirected.current = true;
-            window.location.href = buildRedirectUrl(data.meetingType.redirectUrl, true, data.booking);
+            window.location.href = data.meetingType.redirectUrl;
           }
           return;
         }
@@ -89,7 +88,7 @@ export default function SuccessView() {
     );
   }
 
-  const accent = { ["--bk-accent" as string]: "#FF6A00" } as React.CSSProperties;
+  const accent = { ["--bk-accent" as string]: meetingType?.accentColor || "#FF6A00" } as React.CSSProperties;
 
   if (booking.status === "PENDING_PAYMENT") {
     const stalled = attempts >= MAX_ATTEMPTS;
