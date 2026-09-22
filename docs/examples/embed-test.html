@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>embed.js test harness</title>
+<style>
+  body { font: 15px/1.5 -apple-system, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; }
+  section { margin-bottom: 40px; padding-bottom: 24px; border-bottom: 1px solid #ddd; }
+  h2 { font-size: 16px; }
+  button { padding: 10px 16px; cursor: pointer; }
+  #inline-target { border: 1px dashed #999; min-height: 100px; }
+  #log { white-space: pre-wrap; font: 12px/1.4 monospace; background: #111; color: #0f0; padding: 12px; max-height: 200px; overflow: auto; }
+  .calendly-inline-widget { border: 1px dashed #999; min-height: 100px; }
+</style>
+</head>
+<body>
+  <h1>BookKit embed.js — manual/automated test harness</h1>
+  <p>Point this at a running BookKit dev server. Slug used throughout: <code>intro-call</code> (the seed script's default meeting type).</p>
+
+  <section id="popup-section">
+    <h2>1. Popup — declarative</h2>
+    <button data-bookkit-popup="intro-call" id="popup-btn">Book a call (popup)</button>
+  </section>
+
+  <section id="inline-section">
+    <h2>2. Inline — auto-resizing</h2>
+    <div data-bookkit-inline="intro-call" id="inline-target"></div>
+  </section>
+
+  <section id="badge-section">
+    <h2>3. Badge</h2>
+    <button id="show-badge">Show floating badge</button>
+  </section>
+
+  <section id="jsapi-section">
+    <h2>4. JS API — BookKit.open() with prefill + utm</h2>
+    <button id="open-btn">BookKit.open("intro-call", {...})</button>
+  </section>
+
+  <section id="calendly-section">
+    <h2>5. Calendly drop-in</h2>
+    <p>Inline via <code>.calendly-inline-widget[data-url]</code>:</p>
+    <div class="calendly-inline-widget" data-url="https://calendly.com/buildwithneej/intro-call"></div>
+    <p>Popup via a plain Calendly link:</p>
+    <a href="https://calendly.com/buildwithneej/intro-call">Book via Calendly link</a>
+  </section>
+
+  <section>
+    <h2>Event log</h2>
+    <div id="log"></div>
+  </section>
+
+  <script>
+    window.BOOKKIT_CALENDLY_MAP = {
+      "https://calendly.com/buildwithneej/intro-call": "intro-call",
+    };
+  </script>
+  <!-- Points at the local dev server (npx next dev -p 3103). Change if you're testing
+       against a different instance. -->
+  <script src="http://localhost:3103/embed.js" defer></script>
+  <script>
+    function log(msg) {
+      var el = document.getElementById("log");
+      el.textContent += msg + "\n";
+      el.scrollTop = el.scrollHeight;
+    }
+    ["ready", "height", "date_selected", "slot_selected", "payment_started", "booked", "close"].forEach(function (t) {
+      window.addEventListener("bookkit:" + t, function (e) {
+        log(t + ": " + JSON.stringify(e.detail));
+      });
+    });
+
+    window.addEventListener("DOMContentLoaded", function () {
+      document.getElementById("show-badge").addEventListener("click", function () {
+        window.BookKit.badge({ slug: "intro-call", text: "Book now" });
+      });
+      document.getElementById("open-btn").addEventListener("click", function () {
+        window.BookKit.open("intro-call", {
+          prefill: { name: "Ada Lovelace", email: "ada@example.test" },
+          utm: { utm_campaign: "harness" },
+        });
+      });
+    });
+  </script>
+</body>
+</html>

@@ -4,6 +4,10 @@
     {
       "path": "/api/demo/reset",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/tick",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

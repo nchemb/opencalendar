@@ -1,0 +1,24 @@
+name: BookKit cron tick
+
+# Runs /api/cron/tick every 10 minutes. This is the option for hosts on a plan
+# that only allows daily Vercel Crons (e.g. Hobby) — see docs/RELIABILITY.md.
+#
+# Disabled by default: every job is skipped until you set the repo variable
+# BOOKKIT_URL (Settings -> Secrets and variables -> Actions -> Variables) to
+# your instance's base URL, and the secret CRON_SECRET to match the
+# CRON_SECRET env var on your deployment.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  tick:
+    if: vars.BOOKKIT_URL != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit /api/cron/tick
+        run: |
+          curl -sS -f -X POST "${{ vars.BOOKKIT_URL }}/api/cron/tick" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
