@@ -7,6 +7,18 @@ postMessage events, the JS API): `docs/EMBED-PROTOCOL.md`.
 <script src="https://your-instance.example.com/embed.js" defer></script>
 ```
 
+If your CDN, proxy, or a bundler strips or rewrites the script's own `src` (so
+embed.js can't work out which instance loaded it), pin it explicitly instead —
+this is also required if `document.currentScript` isn't available in your
+setup:
+
+```html
+<script src="/proxied/embed.js" data-bookkit-origin="https://your-instance.example.com" defer></script>
+```
+
+Without one of those two, embed.js refuses to mount (logs a console error)
+rather than guess — it never trusts the page it's running on as the origin.
+
 ## Popup
 
 ```html
