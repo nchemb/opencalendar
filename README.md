@@ -3,240 +3,147 @@
 [![CI](https://github.com/nchemb/bookkit/actions/workflows/ci.yml/badge.svg)](https://github.com/nchemb/bookkit/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A self-hosted Calendly replacement. One Next.js app that reads your real Google
-Calendar availability, writes events with Google Meet links, and takes Stripe
-payments for the meetings you charge for.
+An open-source, self-hosted Calendly replacement. One Next.js app that reads your real
+Google Calendar, takes bookings from any website or social bio, charges with Stripe when
+you want it to, and never loses or double-books a meeting.
 
-![The booking page](docs/screenshots/booking-page.png)
+![The booking page](docs/screenshots/v2/booking-desktop.png)
 
-- **Free and paid meeting types** — put a price on a type and the slot is held
-  while the booker checks out.
-- **Popup or inline embeds** — one `widget.js` does both, plus plain iframes.
-- **No double bookings** — every booking is claimed under a Postgres advisory
-  lock that re-checks your live calendar before committing.
-- **No silent failures** — if a payment lands and the calendar write fails, you
-  get an alert and a retry button rather than a lost booking.
-- **No cron jobs** — holds expire lazily and via Stripe's own
-  `checkout.session.expired`.
-- **Your data, your database.** No accounts, no vendor, no per-seat pricing.
+**Why it exists:** booking links are revenue infrastructure. If one breaks quietly you lose
+calls you'll never know about. BookKit is built around that: every booking is claimed under
+a database lock against your live calendar, every side effect is retried from a durable
+outbox, and anything that goes wrong shows up as an alert, not a log line.
 
-MIT licensed.
+## What you get
 
----
+- **Booking links** — free or paid, one or several durations, Google Meet / Zoom link /
+  phone / in-person / custom locations, up to 10 questions of six types, guests,
+  single-use links, secret links.
+- **Availability like Calendly** — named schedules, date overrides, start-time increments,
+  buffers before and after, minimum notice, rolling calendar-day or business-day windows,
+  fixed date ranges, daily and weekly limits, a pause switch, and a "why is this time not
+  offered?" troubleshooter.
+- **Any number of calendars** checked for conflicts; pick which one bookings are written to.
+- **Invitee self-service** — reschedule and cancel links, with an optional *enforced* cutoff
+  (Calendly only lets you write a policy) and automatic refunds by policy.
+- **Paid bookings** — Stripe card form inline on the page (Apple/Google Pay, Link), slot
+  held while they pay, safe on a Stripe account shared with other apps.
+- **Emails** — confirmation, host notification, reminders (any offsets), follow-up,
+  reschedule and cancellation notices, all branded per site.
+- **Embed anywhere** — one script tag for popup, inline, or floating badge; plain links and
+  iframes; a React component; a link-in-bio page per brand with share images; QR codes.
+  Swapping from Calendly can be a one-line change.
+- **Brands** — run several sites from one install, each with its own name, logo, colors and
+  profile page.
+- **Webhooks, REST API and an MCP server** — so Zapier, your CRM, or an AI agent can read
+  your availability and book you.
+- **Analytics** — views → time picked → booked, by source, plus revenue, cancellations and
+  no-shows. No cookies, no trackers.
+- **Your data, your database.** No accounts, no vendor, no per-seat pricing. MIT licensed.
 
 ## Self-host in ~20 minutes
 
-You need: a Postgres database, a Google account, a Vercel account, and (only if
-you want paid bookings) Stripe.
-
-### 1. Clone and install
+You need Postgres, a Google account, somewhere to run Next.js (Vercel works), and Stripe
+only if you charge.
 
 ```bash
-git clone https://github.com/nchemb/bookkit.git
-cd bookkit
+git clone https://github.com/nchemb/bookkit.git && cd bookkit
 npm install
-cp .env.example .env
-```
-
-### 2. Database
-
-Any Postgres works. On Supabase (free tier):
-
-- Create a project, then **Project Settings → Database → Connection string**.
-- `DATABASE_URL` = the **transaction pooler** string (port `6543`), with
-  `?pgbouncer=true&connection_limit=1` appended.
-- `DIRECT_URL` = the **session pooler** string (port `5432`). Migrations use this.
-
-Prefer to run it locally? `docker compose up -d` starts Postgres on port 5433,
-and the matching URLs are commented at the bottom of `.env.example`.
-
-```bash
-npx prisma migrate deploy
-```
-
-### 3. Google Calendar OAuth
-
-In the [Google Cloud console](https://console.cloud.google.com):
-
-1. Create (or pick) a project → **APIs & Services → Library** → enable **Google Calendar API**.
-2. **OAuth consent screen** → if you have a Google Workspace, choose **Internal**; that skips
-   app verification entirely. On a personal Gmail account choose **External** and add yourself
-   as a test user.
-3. **Credentials → Create credentials → OAuth client ID → Web application**. Add these
-   authorized redirect URIs:
-   - `http://localhost:3000/api/google/callback`
-   - `https://your-domain.com/api/google/callback`
-4. Copy the client ID and secret into `.env`.
-
-Scopes requested are only `calendar.events` and `calendar.freebusy` — BookKit can read when
-you are busy and write its own events, nothing else.
-
-### 4. First run
-
-```bash
-npm run seed   # creates the host row + a starter meeting type
+npm run setup     # writes .env, starts local Postgres, migrates, seeds, tells you what's missing
 npm run dev
 ```
 
-Open `http://localhost:3000/admin`, log in with `ADMIN_PASSWORD`, and click
-**Connect Google Calendar**. Your booking page is live at `/<slug>`.
+Open `http://localhost:3000/admin` (the password is in `.env`), then:
 
-![The admin dashboard](docs/screenshots/admin-meeting-types.png)
+1. **Google Calendar.** In the [Google Cloud console](https://console.cloud.google.com):
+   enable the Google Calendar API, create an OAuth consent screen (**Internal** on a Google
+   Workspace skips verification; on Gmail choose **External** and add yourself as a test
+   user), then **Credentials → OAuth client ID → Web application** with redirect URIs
+   `http://localhost:3000/api/google/callback` and `https://<your-domain>/api/google/callback`.
+   Put the client ID and secret in `.env`, then **Admin → Settings → Connect Google Calendar**
+   and choose which calendars count as busy.
+2. **Email** (strongly recommended). A [Resend](https://resend.com) API key and a verified
+   from-address in `RESEND_API_KEY` / `RESEND_FROM`.
+3. **Alerts.** Set `ALERT_WEBHOOK_URL` to a Slack or Discord webhook or an
+   [ntfy](https://ntfy.sh) topic to get pushed to your phone when anything needs you.
+4. **Stripe** (paid types only). `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`,
+   and a webhook to `https://<your-domain>/api/stripe/webhook` for
+   `checkout.session.completed`, `checkout.session.expired` and `payment_intent.succeeded`
+   with its secret in `STRIPE_WEBHOOK_SECRET`.
+5. **Scheduler.** Call `/api/cron/tick` every 5–10 minutes with
+   `Authorization: Bearer $CRON_SECRET` — retries, reminders and health checks run there.
+   The included `vercel.json` does it on Vercel Pro; see
+   [docs/RELIABILITY.md](docs/RELIABILITY.md) for GitHub Actions, cron and uptime-monitor
+   options.
 
-### 5. Stripe (only for paid types)
+**Deploy:** push to GitHub, import into Vercel, copy every variable from `.env` (watch for
+trailing whitespace in pasted secrets, a classic silent-401), set `NEXT_PUBLIC_APP_URL` and
+`GOOGLE_REDIRECT_URI` to your domain, and reconnect Google once from the deployed admin.
+Use a Postgres that never pauses: a free database that sleeps after a week idle will take
+your booking pages down with it.
 
-```bash
-# local webhook testing
-stripe listen --forward-to localhost:3000/api/stripe/webhook
-# paste the printed whsec_... into STRIPE_WEBHOOK_SECRET
-```
+Coming from Calendly? `npm run import:calendly -- https://calendly.com/<you>` copies your
+event types, questions, prices and hours. See [docs/MIGRATE-FROM-CALENDLY.md](docs/MIGRATE-FROM-CALENDLY.md).
 
-In production, add a webhook endpoint at `https://your-domain.com/api/stripe/webhook`
-subscribed to `checkout.session.completed` and `checkout.session.expired`, and put its
-signing secret in `STRIPE_WEBHOOK_SECRET`.
-
-### 6. Deploy
-
-Push to GitHub, import into Vercel, and set every variable from `.env.example`.
-Set `NEXT_PUBLIC_APP_URL` and `GOOGLE_REDIRECT_URI` to your real domain, then reconnect
-Google once from the deployed `/admin/settings`.
-
-> Watch for trailing whitespace when pasting secrets into a hosting dashboard — it is a
-> classic source of silent 401s. From the CLI use `echo -n "value" | vercel env add NAME production`.
-
----
-
-## Embedding
-
-Add the script once:
-
-```html
-<script src="https://your-domain.com/widget.js" defer></script>
-```
-
-**Popup** — any element with `data-bookkit-popup`, or call the API directly:
+## Put it on your site
 
 ```html
+<script src="https://<your-domain>/embed.js" defer></script>
+
+<!-- popup -->
 <button data-bookkit-popup="strategy-call">Book a call</button>
-<!-- or -->
-<button onclick="BookKit.popup('strategy-call')">Book a call</button>
+
+<!-- inline, sizes itself to its content -->
+<div data-bookkit-inline="strategy-call"></div>
 ```
 
-![The popup embed](docs/screenshots/popup-embed.png)
-
-**Inline** — the picker renders straight into the page, no popup ever opens. It
-reports its own height, so the iframe grows to fit rather than scrolling inside
-itself:
-
-```html
-<div data-bookkit="strategy-call" data-theme="dark" data-primary-color="#FF6A00"></div>
-```
-
-![The inline embed](docs/screenshots/inline-embed.png)
-
-**Plain iframe** — no script needed:
-
-```html
-<iframe src="https://your-domain.com/embed/strategy-call?theme=dark&primaryColor=FF6A00"
-        style="width:100%;min-height:640px;border:0"></iframe>
-```
-
-Query params: `theme` (`dark` | `light`), `primaryColor`, `hideDescription`, `hideHeader`.
-
-### Events
-
-The widget re-emits iframe messages as `window` CustomEvents, so you can track conversions:
-
-```js
-BookKit.on("bookkit.booked", (e) => analytics.track("booked", e));
-window.addEventListener("bookkit.time_selected", (e) => console.log(e.detail));
-```
-
-Events: `bookkit.time_selected`, `bookkit.booked`, `bookkit.checkout`, `bookkit.closed`.
-
----
-
-## Outbound webhook
-
-Set `WEBHOOK_URL` (env or **Admin → Settings**) and every confirmed booking POSTs:
-
-```json
-{
-  "event": "booking.created",
-  "booking": {
-    "id": "...", "name": "...", "email": "...",
-    "meetingType": "strategy-call", "startTime": "2026-09-03T15:00:00.000Z",
-    "timezone": "America/New_York", "amountCents": 6900
-  }
-}
-```
-
-Sent with an `X-BookKit-Secret` header and a 5-second timeout. Failures are logged and
-never affect the booking.
-
----
+Social bio: link to `https://<your-domain>/u/<brand>`. Everything else (badge, React,
+Webflow, WordPress, Framer, Squarespace, email signature, analytics events) is in
+[docs/EMBED.md](docs/EMBED.md). The API is in [docs/API.md](docs/API.md), webhooks in
+[docs/WEBHOOKS.md](docs/WEBHOOKS.md), and AI-agent booking over MCP in [docs/MCP.md](docs/MCP.md).
 
 ## How it stays correct
 
-Every row here has tests behind it. If you change the behaviour, change the test.
+Every row has tests behind it (`npm test` runs them against a real Postgres).
 
-| Risk | What stops it | Covered by |
+| Risk | What stops it | Tests |
 | --- | --- | --- |
-| Two people book one slot | Booking runs inside a Serializable transaction that first takes a `pg_advisory_xact_lock` on the host, re-checks DB overlaps *and* live Google freebusy, then inserts. The loser gets a clean 409. | `concurrency.test.ts` |
-| Payment taken, no calendar event | Event creation retries 3× with backoff; if it still fails the booking becomes `FAILED_NEEDS_INTERVENTION`, you get an alert email, and the dashboard offers a retry. A booking is never `CONFIRMED` without an event id. | `calendar-failure.test.ts` |
-| Slot lost during checkout | The DB hold (33 min) always outlives the Stripe session (31 min), so payment cannot land on a released slot. If it somehow does, BookKit auto-refunds, emails an apology, and alerts you. | `paid-booking.test.ts` |
-| Duplicate Stripe webhooks | `stripeSessionId` is unique and the first delivery claims the booking with a conditional update. Two deliveries produce one booking and one event. | `paid-booking.test.ts` |
-| Abandoned checkout blocks the slot forever | No cron needed: `checkout.session.expired` releases the hold, availability treats any hold past `expiresAt` as free, and the booking transaction retires stale holds before it inserts — so a webhook that never arrives cannot leave a slot advertised but unbookable. | `paid-booking.test.ts` |
-| A forged webhook settles a booking | Stripe signature verification on the raw body, before anything is read. A failure alerts you and changes nothing. | `stripe-webhook.test.ts` |
-| Someone forges an admin session | The cookie is an HMAC over its own expiry, keyed on `ADMIN_PASSWORD`. Extending the expiry invalidates the signature. | `admin-auth.test.ts` |
-| Google API down while rendering availability | Fails **closed** — no slots shown. Losing a booking beats double-booking. | `calendar-failure.test.ts` |
-| Google token revoked | Booking pages switch to an "email me" fallback and you get an alert. A transient blip is told apart from a real revocation and does not flag you. | `google-auth.test.ts` |
-| DST / timezone drift | Everything is stored UTC; all wall-clock maths goes through Luxon in the host timezone. | `availability.test.ts` |
-
-Email and outbound webhooks are deliberately non-fatal — Google's own calendar invite is the
-primary confirmation channel, so a Resend outage cannot cost a booking.
-
----
+| Two people book one slot | The claim runs in a Serializable transaction holding a per-host `pg_advisory_xact_lock`, re-checks DB overlaps, limits **and live free/busy on every conflict calendar**, then inserts. One wins; the rest get a clean 409. | `concurrency`, `v2-booking` |
+| A calendar is unreadable | Fails closed: no slots shown, no bookings taken. An error on any one conflict calendar counts. | `calendar-failure`, `google-auth` |
+| Calendar write fails after the slot is claimed | The booking stays confirmed (it's the invitee's slot), a `calendar.create` job retries with backoff, and you get a critical alert until the event lands. | `calendar-failure` |
+| An email, webhook, reminder or refund fails | Everything after the booking row is a job in a durable outbox, claimed with `SKIP LOCKED`, retried with backoff, and turned into an alert if it finally dies. Nothing is dropped silently. | `v2-booking`, `v2-ops` |
+| Payment lands on a slot someone else took | Hold (33 min) outlives the Stripe session (31 min). If it still happens: automatic refund, apology email, alert. | `paid-booking` |
+| A Stripe webhook is late, duplicated, forged, or from another app on the same account | Signature-verified; claimed once with a conditional update; ignored unless it matches an object BookKit created; and the booking page and cron **pull** payment status from Stripe, so a missing webhook never strands a payer. | `stripe-webhook`, `paid-booking`, `v2-booking` |
+| An abandoned hold burns a slot | Holds expire lazily and are swept inside the booking lock and by the cron — including holds that died before payment ever started. | `paid-booking`, `v2-ops` |
+| Your booking page silently offers nothing | A canary checks every public link can read the calendar and has open times; you're alerted if not. `/api/health` returns 503 for uptime monitors. | `v2-ops` |
+| You delete or move a booked meeting in Google by hand | Reconcile notices and alerts you with the booking, so the invitee gets told. | `v2-ops` |
+| DST and timezones | Stored in UTC; wall-clock maths in the schedule's zone via Luxon, including the spring-forward and fall-back days themselves. | `slots` |
+| Someone forges an admin session | HMAC-signed cookie over expiry + session version; "sign out everywhere" revokes every issued cookie. | `admin-auth` |
 
 ## Commands
 
 ```bash
-npm run dev              # local dev
-npm run build            # prisma generate + next build
-npm run seed             # host row + starter meeting type
-npm run db:up            # Postgres via docker compose
-
-npm run typecheck
-npm run lint
-npm test                 # unit + integration
-npm run test:integration # real Postgres; needs db:up
+npm run setup            # first run
+npm run dev
+npm run build
+npm test                 # unit + integration (needs Postgres: npm run db:up)
 npm run test:e2e         # Playwright against a production build
-npm run test:all         # everything, in the order CI runs it
-
-npx prisma studio        # browse the database
+npm run import:calendly -- https://calendly.com/<you> --dry-run
 ```
 
-No test needs a Google account, a Stripe account, or a network connection — see
-[CONTRIBUTING.md](CONTRIBUTING.md) for how that works, and for the guard that
-stops the suite running against your live keys.
-
----
+No test needs a Google account, a Stripe account, or the network — see
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Adding a calendar backend
 
-Nothing outside `lib/google.ts` talks to Google. Everything goes through
-`calendar()` in `lib/calendar.ts`, which returns a `CalendarPort` — the Google
-one normally, an in-memory one for tests and the demo. Implement the interface,
-register it there, and the rest of the app is unchanged.
-
-## Mobile
-
-![The booking page on a phone](docs/screenshots/mobile.png)
+Everything talks to calendars through `CalendarPort` (`lib/calendar-types.ts`): free/busy,
+create, update, delete, get, list. Google and an in-memory backend ship; Outlook or CalDAV
+is one file plus a line in `lib/calendar.ts`.
 
 ## Not included
 
-Multi-host / round-robin, SMS reminders, group events, two-way calendar sync, waitlists.
-BookKit is deliberately a solo-operator tool. If you need those,
+Round robin, collective and team scheduling, group events, meeting polls, SMS. BookKit is a
+tool for one person running one or more brands. If you need teams,
 [Cal.com](https://cal.com) is open source and does them well.
 
 ## Contributing
