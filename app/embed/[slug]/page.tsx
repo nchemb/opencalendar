@@ -1,44 +1,41 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import BookingFlow from "@/components/booking/BookingFlow";
+import BookingWidget from "@/components/booking/BookingWidget";
+import { bumpMetric } from "@/lib/analytics";
+import { hostBookingBlocked } from "@/lib/booking";
 import { env } from "@/lib/env";
 import { findActiveMeetingType, toPublic } from "@/lib/meeting-types";
-import { hostBookingBlocked } from "@/lib/booking";
+import { isBotUserAgent } from "@/lib/ui/bot";
+import { parseBookingParams } from "@/lib/ui/params";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
-
-type Search = {
-  theme?: string;
-  primaryColor?: string;
-  hideDescription?: string;
-  hideHeader?: string;
-};
-
-/** Accepts "FF6A00" or "#FF6A00"; anything else falls back to the meeting type's color. */
-function safeColor(input: string | undefined, fallback: string): string {
-  if (!input) return fallback;
-  const v = input.startsWith("#") ? input : `#${input}`;
-  return /^#[0-9a-fA-F]{6}$/.test(v) ? v : fallback;
-}
 
 export default async function EmbedPage({
   params,
   searchParams,
 }: {
   params: { slug: string };
-  searchParams: Search;
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
   const found = await findActiveMeetingType(params.slug);
   if (!found) notFound();
-
   const { meetingType, host } = found;
-  const theme = searchParams.theme === "light" ? "light" : "dark";
-  const publicType = {
-    ...toPublic(meetingType, host),
-    color: safeColor(searchParams.primaryColor, meetingType.color),
-  };
+  const publicType = toPublic(meetingType, host);
+  const bookingParams = parseBookingParams(
+    searchParams,
+    publicType.questions.map((q) => q.id)
+  );
+
+  if (!isBotUserAgent(headers().get("user-agent"))) {
+    await bumpMetric(meetingType.id, "view", bookingParams.utm.utm_source);
+  }
+
+  const brandTheme = publicType.brand?.theme ?? "auto";
+  const theme = bookingParams.theme ?? (brandTheme === "auto" ? "dark" : brandTheme);
+  if (bookingParams.accent) publicType.color = bookingParams.accent;
 
   return (
     <div data-theme={theme} className="bk-embed p-1 sm:p-2" style={{ background: "transparent" }}>
@@ -52,14 +49,15 @@ export default async function EmbedPage({
             "[data-bookkit-demo-banner]{display:none !important}",
         }}
       />
-      <BookingFlow
+      <BookingWidget
         meetingType={publicType}
         hostEmail={host.email}
         blocked={hostBookingBlocked(host)}
         embed
-        hideDescription={searchParams.hideDescription === "true" || searchParams.hideDescription === "1"}
-        chrome={!(searchParams.hideHeader === "true" || searchParams.hideHeader === "1")}
+        embedCtx={{ embedId: bookingParams.embedId, slug: params.slug }}
+        hideDetails={bookingParams.hideDetails}
         stripePublishableKey={env("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY") ?? null}
+        params={bookingParams}
       />
     </div>
   );

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +34,14 @@ const FEATURES = [
 ];
 
 export default async function Home() {
+  // A single-brand instance (the common case — one host, one site) goes straight to its
+  // link-in-bio page; the OSS marketing page below only makes sense for a bare/multi-brand install.
+  const brandCount = await prisma.brand.count().catch(() => 0);
+  if (brandCount === 1) {
+    const only = await prisma.brand.findFirstOrThrow({ select: { slug: true } });
+    redirect(`/u/${only.slug}`);
+  }
+
   const types = await prisma.meetingType
     .findMany({
       where: { active: true },
