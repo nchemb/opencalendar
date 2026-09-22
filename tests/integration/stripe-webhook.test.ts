@@ -206,14 +206,17 @@ describe("event dispatch", () => {
       data: { object: { id: "cs_boom", payment_status: "paid", amount_total: 100 } },
     });
 
-    const spy = vi.spyOn(prisma.booking, "findUnique").mockRejectedValueOnce(
-      new Error("database is on fire")
-    );
-
-    const res = await webhookRoute(webhookRequest("{}"));
-    expect(res.status).toBe(500);
-    expect(await json(res).then((b) => b.code)).toBe("HANDLER_FAILED");
-
-    spy.mockRestore();
+    // Patch and put back by hand: vi.spyOn(...).mockRestore() on a Prisma model
+    // delegate deletes the property from the shared client, breaking every later
+    // test file in the same fork.
+    const original = prisma.booking.findUnique;
+    (prisma.booking as { findUnique: unknown }).findUnique = vi.fn().mockRejectedValueOnce(new Error("database is on fire"));
+    try {
+      const res = await webhookRoute(webhookRequest("{}"));
+      expect(res.status).toBe(500);
+      expect(await json(res).then((b) => b.code)).toBe("HANDLER_FAILED");
+    } finally {
+      (prisma.booking as { findUnique: unknown }).findUnique = original;
+    }
   });
 });
