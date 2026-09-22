@@ -1,5 +1,5 @@
 import { createFreeBooking, priceFor, resolveDuration, resolveSingleUseLink, startPaidCheckout, startPaidIntent } from "@/lib/booking";
-import { parseBookingRequest, publicBooking, publicRedirectFields } from "@/lib/booking-request";
+import { parseBookingRequest, publicBooking as basePublicBooking, publicRedirectFields } from "@/lib/booking-request";
 import { buildRedirectUrl } from "@/lib/ui/redirect";
 import { env } from "@/lib/env";
 import { bookingErrorResponse, clientIp, fail, ok, readJson } from "@/lib/http";
@@ -10,6 +10,9 @@ import { stripeConfigured, stripeKeyMismatch } from "@/lib/stripe";
 import { isSlug, looksLikeBot } from "@/lib/validate";
 
 export const dynamic = "force-dynamic";
+
+/** The creator always gets the manage token — a pending paid booking needs it to poll its own status. */
+const publicBooking = (b: Parameters<typeof basePublicBooking>[0]) => ({ ...basePublicBooking(b), manageToken: b.cancelToken });
 export const maxDuration = 30;
 
 /**

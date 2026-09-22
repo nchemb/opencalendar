@@ -54,7 +54,7 @@ export default function BookingWidget({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState<ConfirmedBooking | null>(null);
-  const [payment, setPayment] = useState<{ bookingId: string; clientSecret: string; expiresAt: string } | null>(null);
+  const [payment, setPayment] = useState<{ bookingId: string; token: string; clientSecret: string; expiresAt: string } | null>(null);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const ctx = embedCtx ?? { embedId: null, slug: mt.slug };
@@ -126,13 +126,13 @@ export default function BookingWidget({
 
   /** Inline payment: poll our own status endpoint until the (possibly late) webhook confirms. */
   const pollUntilConfirmed = useCallback(
-    (bookingId: string) => {
+    (bookingId: string, token: string) => {
       setStep("confirming");
       let attempts = 0;
       const poll = async () => {
         attempts += 1;
         try {
-          const res = await fetch(`/api/bookings/${bookingId}`, { cache: "no-store" });
+          const res = await fetch(`/api/bookings/${bookingId}?t=${encodeURIComponent(token)}`, { cache: "no-store" });
           const data = await res.json();
           if (data.ok && data.booking.status === "CONFIRMED") {
             finish(data.booking, data.meetingType?.redirectUrl ?? null);
@@ -193,7 +193,7 @@ export default function BookingWidget({
       }
 
       if (data.payment?.clientSecret) {
-        setPayment({ bookingId: data.booking.id, clientSecret: data.payment.clientSecret, expiresAt: data.payment.expiresAt });
+        setPayment({ bookingId: data.booking.id, token: data.booking.manageToken, clientSecret: data.payment.clientSecret, expiresAt: data.payment.expiresAt });
         setStep("payment");
         emitEmbed(ctx, "payment_started", { bookingId: data.booking.id });
         return;
@@ -274,7 +274,7 @@ export default function BookingWidget({
           expiresAt={payment.expiresAt}
           accentColor={mt.color}
           amountLabel={money(selectedDuration.priceCents!, mt.currency)}
-          onPaid={pollUntilConfirmed}
+          onPaid={(id: string) => pollUntilConfirmed(id, payment.token)}
           onExpired={() => backToCalendar("That hold expired. Pick a time again.")}
         />
       </div>
