@@ -16,7 +16,16 @@ async function main() {
 
   let host = await prisma.host.findFirst({ orderBy: { createdAt: "asc" } });
   if (!host) {
-    host = await prisma.host.create({ data: { email, timezone, displayName: email.split("@")[0] } });
+    // With the in-memory calendar there is no Google to connect; mark the host as connected.
+    const memory = process.env.BOOKKIT_CALENDAR?.trim() === "memory";
+    host = await prisma.host.create({
+      data: {
+        email,
+        timezone,
+        displayName: email.split("@")[0],
+        ...(memory ? { googleRefreshToken: "memory-calendar", googleConnectedAt: new Date() } : {}),
+      },
+    });
     console.log(`created host ${host.email} (${host.timezone})`);
   } else {
     console.log(`host already exists: ${host.email}`);

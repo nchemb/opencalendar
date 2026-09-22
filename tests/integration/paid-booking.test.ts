@@ -101,11 +101,12 @@ describe("hold and checkout", () => {
     const host = await createHost();
     const paid = await createPaidMeetingType(host);
     const startTime = slotAt();
+    const free = await createMeetingType(host, { slug: "free-same-host" });
 
     await startPaidCheckout(host, paid, bookingInput({ startTime }));
 
     await expect(
-      createFreeBooking(host, paid, bookingInput({ startTime }))
+      createFreeBooking(host, free, bookingInput({ startTime }))
     ).rejects.toBeInstanceOf(SlotTakenError);
   });
 
@@ -266,6 +267,7 @@ describe("abandoned checkout", () => {
     const host = await createHost();
     const meetingType = await createPaidMeetingType(host);
     const startTime = slotAt();
+    const free = await createMeetingType(host, { slug: "free-same-host" });
 
     const { booking } = await startPaidCheckout(host, meetingType, bookingInput({ startTime }));
 
@@ -285,7 +287,7 @@ describe("abandoned checkout", () => {
     expect(slots.map((s) => s.getTime())).toContain(startTime.getTime());
 
     // And another booker can actually take it.
-    const winner = await createFreeBooking(host, meetingType, bookingInput({ startTime }));
+    const winner = await createFreeBooking(host, free, bookingInput({ startTime }));
     expect(winner.status).toBe("CONFIRMED");
   });
 
@@ -298,6 +300,7 @@ describe("abandoned checkout", () => {
     const host = await createHost();
     const meetingType = await createPaidMeetingType(host);
     const startTime = slotAt();
+    const free = await createMeetingType(host, { slug: "free-same-host" });
 
     const { booking } = await startPaidCheckout(host, meetingType, bookingInput({ startTime }));
 
@@ -307,7 +310,7 @@ describe("abandoned checkout", () => {
       data: { expiresAt: new Date(Date.now() - 60_000) },
     });
 
-    const second = await createFreeBooking(host, meetingType, bookingInput({ startTime }));
+    const second = await createFreeBooking(host, free, bookingInput({ startTime }));
     expect(second.status).toBe("CONFIRMED");
 
     // The stale hold was retired rather than left to collide forever.
@@ -319,6 +322,7 @@ describe("abandoned checkout", () => {
     const host = await createHost();
     const meetingType = await createPaidMeetingType(host);
     const startTime = slotAt();
+    const free = await createMeetingType(host, { slug: "free-same-host" });
 
     const { booking } = await startPaidCheckout(host, meetingType, bookingInput({ startTime }));
 
@@ -330,7 +334,7 @@ describe("abandoned checkout", () => {
     });
 
     await expect(
-      createFreeBooking(host, meetingType, bookingInput({ startTime, email: "other@example.test" }))
+      createFreeBooking(host, free, bookingInput({ startTime, email: "other@example.test" }))
     ).rejects.toBeInstanceOf(SlotTakenError);
 
     const held = await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } });
@@ -391,7 +395,8 @@ describe("payment lands on a slot that was taken anyway", () => {
     });
     await createFreeBooking(host, free, bookingInput({ startTime }));
 
-    stripeMock.refunds.create.mockRejectedValueOnce(new Error("refund failed"));
+    // Stripe keeps refusing: the refund is queued for retry, never marked done.
+    stripeMock.refunds.create.mockRejectedValue(new Error("refund failed"));
 
     await finalizePaidBooking({
       id: booking.stripeSessionId!,
@@ -404,6 +409,9 @@ describe("payment lands on a slot that was taken anyway", () => {
     expect(failed.status).toBe("FAILED_NEEDS_INTERVENTION");
     // Not marked refunded, because it was not.
     expect(failed.stripePaymentStatus).toBe("paid");
+    // …and a refund job stays queued so it is retried rather than forgotten.
+    const job = await prisma.job.findFirstOrThrow({ where: { bookingId: booking.id, kind: "refund" } });
+    expect(job.doneAt).toBeNull();
   });
 });
 

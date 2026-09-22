@@ -69,7 +69,7 @@ describe("signature verification", () => {
 
     expect(res.status).toBe(400);
     expect(await json(res).then((b) => b.code)).toBe("BAD_SIGNATURE");
-    expect(sendMail.mock.calls.some(([a]) => a.subject.includes("[SECURITY]"))).toBe(true);
+    expect(sendMail.mock.calls.some(([a]) => a.subject.includes("signature failed"))).toBe(true);
   });
 
   test("a forged event body cannot settle a booking", async () => {

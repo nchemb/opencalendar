@@ -21,12 +21,13 @@ vi.mock("next/headers", () => ({
 }));
 
 import {
-  assertAdmin,
+  adminSession,
   checkPassword,
   clearSessionCookie,
-  isAdmin,
   issueSessionCookie,
+  revokeAllSessions,
 } from "../../lib/auth";
+import { createHost } from "../helpers/factories";
 import {
   DELETE as logout,
   GET as sessionStatus,
@@ -37,8 +38,12 @@ import { POST as createMeetingTypeRoute } from "../../app/api/admin/meeting-type
 const COOKIE = "bookkit_admin";
 const PASSWORD = "test-admin-password";
 
-function sign(expiresAt: number, key = PASSWORD): string {
-  return createHmac("sha256", key).update(`admin.${expiresAt}`).digest("hex");
+function sign(expiresAt: number, key = PASSWORD, version = 1): string {
+  return createHmac("sha256", key).update(`admin.${expiresAt}.${version}`).digest("hex");
+}
+
+function cookie(expiresAt: number, sig: string, version = 1) {
+  return `${expiresAt}.${version}.${sig}`;
 }
 
 async function json(res: Response) {
@@ -75,56 +80,59 @@ describe("password check", () => {
 });
 
 describe("session cookie", () => {
-  test("a freshly issued cookie authenticates", () => {
-    expect(isAdmin()).toBe(false);
-    issueSessionCookie();
-    expect(isAdmin()).toBe(true);
+  test("a freshly issued cookie authenticates", async () => {
+    await createHost();
+    expect(await adminSession()).toBe(false);
+    await issueSessionCookie();
+    expect(await adminSession()).toBe(true);
   });
 
-  test("logging out clears the session", () => {
-    issueSessionCookie();
+  test("logging out clears the session", async () => {
+    await issueSessionCookie();
     clearSessionCookie();
-    expect(isAdmin()).toBe(false);
+    expect(await adminSession()).toBe(false);
   });
 
-  test("a cookie signed with the wrong key is rejected", () => {
+  test("signing out everywhere revokes cookies already issued", async () => {
+    await createHost();
+    await issueSessionCookie();
+    const stolen = jar.get(COOKIE)!;
+    await revokeAllSessions();
+    jar.set(COOKIE, stolen);
+    expect(await adminSession()).toBe(false);
+  });
+
+  test("a cookie signed with the wrong key is rejected", async () => {
     const expiresAt = Date.now() + 60_000;
-    jar.set(COOKIE, `${expiresAt}.${sign(expiresAt, "guessed-password")}`);
-    expect(isAdmin()).toBe(false);
+    jar.set(COOKIE, cookie(expiresAt, sign(expiresAt, "guessed-password")));
+    expect(await adminSession()).toBe(false);
   });
 
-  test("an expired cookie is rejected even with a valid signature", () => {
+  test("an expired cookie is rejected even with a valid signature", async () => {
     const expiresAt = Date.now() - 1_000;
-    jar.set(COOKIE, `${expiresAt}.${sign(expiresAt)}`);
-    expect(isAdmin()).toBe(false);
+    jar.set(COOKIE, cookie(expiresAt, sign(expiresAt)));
+    expect(await adminSession()).toBe(false);
   });
 
-  test("extending the expiry invalidates the signature", () => {
+  test("extending the expiry invalidates the signature", async () => {
     const realExpiry = Date.now() + 60_000;
     const signature = sign(realExpiry);
     // Attacker keeps the signature but pushes the expiry out a year.
-    const forged = realExpiry + 365 * 86_400_000;
-    jar.set(COOKIE, `${forged}.${signature}`);
-    expect(isAdmin()).toBe(false);
+    jar.set(COOKIE, cookie(realExpiry + 365 * 86_400_000, signature));
+    expect(await adminSession()).toBe(false);
   });
 
-  test("malformed cookie values are rejected, not crashed on", () => {
-    for (const value of ["", ".", "abc", "abc.def", "123", `${Date.now() + 1000}.`, "..."]) {
+  test("bumping the version in the cookie invalidates the signature", async () => {
+    const expiresAt = Date.now() + 60_000;
+    jar.set(COOKIE, cookie(expiresAt, sign(expiresAt, PASSWORD, 1), 2));
+    expect(await adminSession()).toBe(false);
+  });
+
+  test("malformed cookie values are rejected, not crashed on", async () => {
+    for (const value of ["", ".", "abc", "abc.def", "123", `${Date.now() + 1000}.`, "...", `${Date.now() + 1000}.x.y`]) {
       jar.set(COOKIE, value);
-      expect(isAdmin()).toBe(false);
+      expect(await adminSession()).toBe(false);
     }
-  });
-
-  test("assertAdmin throws a 401-shaped error when signed out", () => {
-    expect(() => assertAdmin()).toThrowError(/Not authorized/);
-    try {
-      assertAdmin();
-    } catch (err) {
-      expect((err as { status?: number }).status).toBe(401);
-    }
-
-    issueSessionCookie();
-    expect(() => assertAdmin()).not.toThrow();
   });
 });
 
@@ -144,12 +152,13 @@ describe("POST /api/admin/session", () => {
   });
 
   test("GET reports the current state, and DELETE logs out", async () => {
+    const del = () => logout(new Request("http://localhost:3000/api/admin/session", { method: "DELETE" }));
     expect(await sessionStatus().then(json).then((b) => b.authenticated)).toBe(false);
 
     await login(loginRequest(PASSWORD));
     expect(await sessionStatus().then(json).then((b) => b.authenticated)).toBe(true);
 
-    await logout();
+    await del();
     expect(await sessionStatus().then(json).then((b) => b.authenticated)).toBe(false);
   });
 
@@ -187,7 +196,7 @@ describe("admin API routes reject anonymous callers", () => {
 
   test("with a forged cookie the write is still refused", async () => {
     const expiresAt = Date.now() + 86_400_000;
-    jar.set(COOKIE, `${expiresAt}.${sign(expiresAt, "not-the-password")}`);
+    jar.set(COOKIE, cookie(expiresAt, sign(expiresAt, "not-the-password")));
 
     const res = await createMeetingTypeRoute(createRequest());
     expect(res.status).toBe(401);

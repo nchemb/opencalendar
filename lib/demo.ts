@@ -72,6 +72,12 @@ export async function resetDemoData(): Promise<{ host: string; meetingTypes: num
     },
   });
 
+  const brand = await prisma.brand.upsert({
+    where: { slug: "demo" },
+    update: {},
+    create: { hostId: host.id, slug: "demo", name: "BookKit Demo", tagline: "Book a fake meeting. Resets daily.", accentColor: "#FF6A00" },
+  });
+
   for (const type of DEMO_TYPES) {
     const data = {
       hostId: host.id,
@@ -83,9 +89,12 @@ export async function resetDemoData(): Promise<{ host: string; meetingTypes: num
       color: type.color,
       weeklyHours: DEMO_HOURS as object,
       daysInAdvance: 21,
-      minNoticeHours: 1,
-      bufferMinutes: 0,
+      minNoticeMinutes: 60,
+      bufferBeforeMinutes: 0,
+      bufferAfterMinutes: 0,
       dailyLimit: null,
+      reminderMinutes: [],
+      brandId: brand.id,
       questions: (type.questions ?? undefined) as object | undefined,
       displayMode: type.displayMode,
       active: true,

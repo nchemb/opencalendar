@@ -46,7 +46,7 @@ export async function GET(req: Request) {
     return ok({ slots: [], timezone: tz, durationMinutes: meetingType.durationMinutes, paused });
   }
   if (hostBookingBlocked(host)) {
-    return fail("Booking is temporarily unavailable. Please try again later.", 503, "CALENDAR_DISCONNECTED");
+    return fail("Online booking is temporarily unavailable. Please email to arrange a time.", 503, "CALENDAR_DISCONNECTED");
   }
 
   try {

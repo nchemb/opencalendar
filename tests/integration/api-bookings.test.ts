@@ -70,7 +70,7 @@ describe("POST /api/bookings", () => {
 
     const booking = body.booking as Record<string, unknown>;
     expect(booking.status).toBe("CONFIRMED");
-    expect(booking.cancelToken).toBeTruthy();
+    expect(booking.manageToken).toBeTruthy();
     expect(booking.meetLink).toBeTruthy();
 
     // The email is normalised to lowercase on the way in.
@@ -106,16 +106,15 @@ describe("POST /api/bookings", () => {
     expect(await prisma.booking.count()).toBe(0);
   });
 
-  test("a paid meeting type cannot be booked for free through this route", async () => {
+  test("a paid meeting type is never confirmed without payment", async () => {
     const host = await createHost();
     await createPaidMeetingType(host, { slug: "paid" });
 
+    // The fake Stripe key cannot reach Stripe, so starting payment fails — and the
+    // hold is released instead of anything being confirmed for free.
     const res = await createBooking(bookingRequest(validBody("paid")));
-    const body = await json(res);
-
-    expect(res.status).toBe(400);
-    expect(body.code).toBe("PAYMENT_REQUIRED");
-    expect(await prisma.booking.count()).toBe(0);
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(await prisma.booking.count({ where: { status: "CONFIRMED" } })).toBe(0);
   });
 
   test("an inactive meeting type is not bookable", async () => {
@@ -236,7 +235,7 @@ describe("POST /api/bookings", () => {
 
       const booking = await prisma.booking.findFirstOrThrow();
       expect(booking.answers).toEqual([
-        { label: "What are you building?", answer: "A booking tool" },
+        { id: "q1", label: "What are you building?", answer: "A booking tool" },
       ]);
       expect(booking.customAnswer).toContain("A booking tool");
     });

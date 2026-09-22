@@ -3,6 +3,7 @@
  * on a box you own, an uptime monitor) — see docs/RELIABILITY.md. Every task is
  * idempotent, so overlapping or missed ticks are harmless.
  */
+import { timingSafeEqual } from "node:crypto";
 import { prisma } from "./db";
 import { drainJobs, type DrainResult } from "./jobs";
 import { errorMessage, log } from "./logger";
@@ -12,6 +13,13 @@ import { raiseAlert, resolveAlert } from "./alerts";
 import { getHost, hostBookingBlocked, syncPaymentFromStripe } from "./booking";
 import { appUrl, env, hasResend, isDemoMode } from "./env";
 import { stripeConfigured } from "./stripe";
+
+/**
+ * "Not paid" including NULL. Prisma's `{ not: "paid" }` compiles to `<> 'paid'`,
+ * which is false for NULL — a hold that died before its payment started would
+ * never be swept and would burn its slot forever.
+ */
+const UNPAID = [{ stripePaymentStatus: null }, { stripePaymentStatus: { not: "paid" } }];
 
 const CANARY_EVERY_MS = 30 * 60_000;
 const RECONCILE_EVERY_MS = 30 * 60_000;
@@ -34,7 +42,7 @@ export async function lastTickAt(): Promise<number> {
 /** Release unpaid holds whose expiry has passed, across all hosts. */
 async function sweepHolds(): Promise<number> {
   const res = await prisma.booking.updateMany({
-    where: { status: "PENDING_PAYMENT", expiresAt: { lte: new Date() }, stripePaymentStatus: { not: "paid" } },
+    where: { status: "PENDING_PAYMENT", expiresAt: { lte: new Date() }, OR: UNPAID },
     data: { status: "EXPIRED", expiresAt: null },
   });
   return res.count;
@@ -225,7 +233,9 @@ export async function tick(opts: { budgetMs?: number; force?: boolean } = {}): P
 export function cronAuthorized(req: Request): boolean {
   const secret = env("CRON_SECRET");
   const auth = req.headers.get("authorization");
-  if (secret && auth === `Bearer ${secret}`) return true;
-  if (secret && new URL(req.url).searchParams.get("secret") === secret) return true;
-  return false;
+  // Header only: a secret in the query string ends up in access logs.
+  if (!secret || !auth) return false;
+  const a = Buffer.from(auth);
+  const b = Buffer.from(`Bearer ${secret}`);
+  return a.length === b.length && timingSafeEqual(a, b);
 }

@@ -1,9 +1,8 @@
 /**
  * README claims covered here:
- *  - "Payment taken, no calendar event → Event creation retries 3× with backoff;
- *     if it still fails the booking becomes FAILED_NEEDS_INTERVENTION, you get an
- *     alert email, and the dashboard offers a retry. A booking is never CONFIRMED
- *     without an event id."
+ *  - "Calendar write fails → the booking is still confirmed (the slot is the
+ *     invitee's), a calendar.create job retries with backoff, and the host gets a
+ *     critical alert until the event lands."
  *  - "Google API down while rendering availability → Fails closed — no slots shown."
  *  - "Google token revoked → Booking pages switch to an 'email me' fallback."
  */
@@ -21,12 +20,14 @@ vi.mock("../../lib/mailer", async (importOriginal) => {
 import { prisma } from "../../lib/db";
 import {
   BookingUnavailableError,
+  SlotTakenError,
   createFreeBooking,
   finalizePaidBooking,
   retryFailedBooking,
   startPaidCheckout,
 } from "../../lib/booking";
 import { getAvailability, isSlotOpen } from "../../lib/availability";
+import { drainJobs } from "../../lib/jobs";
 import { GoogleApiError, GoogleAuthError } from "../../lib/calendar-types";
 import { memoryCalendarControl } from "../../lib/calendar-memory";
 import {
@@ -64,23 +65,24 @@ beforeEach(() => {
 });
 
 describe("the calendar write fails", () => {
-  test("a free booking that exhausts its retries is flagged, not confirmed", async () => {
+  test("a free booking whose calendar write fails is still confirmed, queued for retry and alerted", async () => {
     const host = await createHost();
     const meetingType = await createMeetingType(host);
 
     memoryCalendarControl.failCreateAttempts(3);
 
-    await expect(
-      createFreeBooking(host, meetingType, bookingInput())
-    ).rejects.toBeInstanceOf(GoogleApiError);
-
-    const booking = await prisma.booking.findFirstOrThrow();
-    expect(booking.status).toBe("FAILED_NEEDS_INTERVENTION");
+    const booking = await createFreeBooking(host, meetingType, bookingInput());
+    // The slot is the invitee's: confirmed in our DB even though Google said no.
+    expect(booking.status).toBe("CONFIRMED");
     expect(booking.googleEventId).toBeNull();
     expect(booking.googleSyncError).toContain("injected fault");
-    expect(booking.retryCount).toBe(1);
     expect(booking.expiresAt).toBeNull();
 
+    const job = await prisma.job.findFirstOrThrow({ where: { bookingId: booking.id, kind: "calendar.create" } });
+    expect(job.doneAt).toBeNull();
+
+    const alert = await prisma.alert.findFirstOrThrow({ where: { bookingId: booking.id, kind: "calendar_pending" } });
+    expect(alert.severity).toBe("critical");
     expect(sentSubjects().some((s) => s.includes("[CRITICAL]"))).toBe(true);
   });
 
@@ -97,20 +99,39 @@ describe("the calendar write fails", () => {
     expect(memoryCalendarControl.eventCount()).toBe(1);
   });
 
-  test("a booking is never CONFIRMED without an event id", async () => {
+  test("a confirmed booking without an event still owns its slot", async () => {
+    const host = await createHost();
+    const meetingType = await createMeetingType(host);
+    const startTime = slotAt();
+
+    memoryCalendarControl.failCreateAttempts(3);
+    await createFreeBooking(host, meetingType, bookingInput({ startTime }));
+
+    await expect(
+      createFreeBooking(host, meetingType, bookingInput({ startTime, email: "second@example.test" }))
+    ).rejects.toBeInstanceOf(SlotTakenError);
+  });
+
+  test("the queued write lands once the calendar recovers, and the alert closes", async () => {
     const host = await createHost();
     const meetingType = await createMeetingType(host);
 
     memoryCalendarControl.failCreateAttempts(3);
-    await expect(createFreeBooking(host, meetingType, bookingInput())).rejects.toThrow();
+    const booking = await createFreeBooking(host, meetingType, bookingInput());
 
-    const confirmedWithoutEvent = await prisma.booking.count({
-      where: { status: "CONFIRMED", googleEventId: null },
-    });
-    expect(confirmedWithoutEvent).toBe(0);
+    memoryCalendarControl.failCreateAttempts(0);
+    await prisma.job.updateMany({ where: { bookingId: booking.id }, data: { runAt: new Date() } });
+    await drainJobs({ budgetMs: 5_000 });
+
+    const fixed = await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } });
+    expect(fixed.googleEventId).toBeTruthy();
+    expect(fixed.googleSyncError).toBeNull();
+    expect(memoryCalendarControl.eventCount()).toBe(1);
+    const alert = await prisma.alert.findFirstOrThrow({ where: { bookingId: booking.id, kind: "calendar_pending" } });
+    expect(alert.resolvedAt).not.toBeNull();
   });
 
-  test("a paid booking that fails the calendar write says so in the alert", async () => {
+  test("a paid booking that fails the calendar write keeps the money and says so in the alert", async () => {
     const host = await createHost();
     const meetingType = await createPaidMeetingType(host);
     const { booking } = await startPaidCheckout(host, meetingType, bookingInput());
@@ -124,42 +145,39 @@ describe("the calendar write fails", () => {
       amount_total: 6900,
     });
 
-    const failed = await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } });
-    expect(failed.status).toBe("FAILED_NEEDS_INTERVENTION");
-    expect(failed.stripePaymentStatus).toBe("paid");
+    const settled = await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } });
+    expect(settled.status).toBe("CONFIRMED");
+    expect(settled.stripePaymentStatus).toBe("paid");
+    expect(settled.googleEventId).toBeNull();
 
-    // The money is kept, not auto-refunded — this is a calendar outage, not a
-    // slot conflict. The host is told to sort it out by hand.
+    // A calendar outage is not a slot conflict: no refund, the host is told.
     expect(stripeMock.refunds.create).not.toHaveBeenCalled();
-    expect(sentSubjects().some((s) => s.includes("AFTER PAYMENT"))).toBe(true);
+    expect(sentSubjects().some((s) => s.includes("(paid)"))).toBe(true);
   });
 
-  test("the admin retry recovers a failed booking once the calendar is back", async () => {
+  test("the admin retry writes the event immediately once the calendar is back", async () => {
     const host = await createHost();
     const meetingType = await createMeetingType(host);
 
     memoryCalendarControl.failCreateAttempts(3);
-    await expect(createFreeBooking(host, meetingType, bookingInput())).rejects.toThrow();
-
-    const failed = await prisma.booking.findFirstOrThrow();
-    expect(failed.status).toBe("FAILED_NEEDS_INTERVENTION");
-
-    // Calendar recovers.
+    const pending = await createFreeBooking(host, meetingType, bookingInput());
     memoryCalendarControl.failCreateAttempts(0);
 
-    const recovered = await retryFailedBooking(failed.id);
+    const recovered = await retryFailedBooking(pending.id);
     expect(recovered.status).toBe("CONFIRMED");
     expect(recovered.googleEventId).toBeTruthy();
     expect(recovered.googleSyncError).toBeNull();
     expect(memoryCalendarControl.eventCount()).toBe(1);
   });
 
-  test("retry refuses bookings that are not in the failed state", async () => {
+  test("retry on a healthy booking is a no-op", async () => {
     const host = await createHost();
     const meetingType = await createMeetingType(host);
     const booking = await createFreeBooking(host, meetingType, bookingInput());
 
-    await expect(retryFailedBooking(booking.id)).rejects.toThrow(/Only failed bookings/);
+    const again = await retryFailedBooking(booking.id);
+    expect(again.googleEventId).toBe(booking.googleEventId);
+    expect(memoryCalendarControl.eventCount()).toBe(1);
   });
 });
 

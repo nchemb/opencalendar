@@ -18,7 +18,7 @@ beforeEach(async () => {
   // Order does not matter under CASCADE, but naming every table keeps a new
   // model from silently leaking state between tests.
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "Booking", "MeetingType", "Host", "Setting" RESTART IDENTITY CASCADE'
+    'TRUNCATE TABLE "Booking", "BookingEvent", "Job", "Alert", "SingleUseLink", "MeetingType", "Schedule", "Brand", "WebhookEndpoint", "ApiKey", "AnalyticsDaily", "Host", "Setting" RESTART IDENTITY CASCADE'
   );
   memoryCalendarControl.reset();
 });

@@ -31,7 +31,7 @@ export function parseBookingRequest(body: Record<string, unknown>, mt: MeetingTy
   if (!startTime) return { ok: false, error: "Pick a time slot.", code: "BAD_TIME" };
 
   const answers = parseAnswers(body.answers, questionsOf(mt));
-  if (!answers.ok) return { ok: false, error: answers.error, code: "BAD_ANSWER" };
+  if (!answers.ok) return { ok: false, error: answers.error, code: "MISSING_ANSWER" };
 
   const guests = mt.allowGuests ? parseGuests(body.guests, mt.maxGuests, email!) : [];
   if (!Array.isArray(guests)) return { ok: false, error: guests.error, code: "BAD_GUESTS" };

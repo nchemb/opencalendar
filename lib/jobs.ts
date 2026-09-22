@@ -49,9 +49,10 @@ export async function enqueue(
   opts: EnqueueOptions = {},
   client: Client = prisma
 ): Promise<void> {
-  try {
-    await client.job.create({
-      data: {
+  // skipDuplicates: a repeated dedupe key is a silent no-op (no error, no log noise).
+  await client.job.createMany({
+    data: [
+      {
         kind,
         payload: payload as Prisma.InputJsonValue,
         bookingId: opts.bookingId ?? null,
@@ -59,11 +60,9 @@ export async function enqueue(
         dedupeKey: opts.dedupeKey ?? null,
         maxAttempts: opts.maxAttempts ?? 8,
       },
-    });
-  } catch (err) {
-    if ((err as { code?: string })?.code === "P2002") return; // dedupe hit
-    throw err;
-  }
+    ],
+    skipDuplicates: true,
+  });
 }
 
 /** Backoff: 30s, 1m, 2m, 4m ... capped at 3h. */

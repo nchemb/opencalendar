@@ -16,7 +16,7 @@ import { randomBytes } from "node:crypto";
 import { Prisma, type Booking, type Host, type MeetingType, type SingleUseLink } from "@prisma/client";
 import { DateTime } from "luxon";
 import { prisma } from "./db";
-import { appUrl, calendarBackend, isDemoMode } from "./env";
+import { appUrl, isDemoMode } from "./env";
 import {
   isSlotOnGrid,
   liveBookingStatusFilter,
@@ -39,6 +39,13 @@ import { sendCalendarPendingAlert, sendConflictRefundAlert } from "./alerts";
 import { durationChoices, locationLabel, parseLocations, type LocationOption } from "./types";
 import { bumpMetric } from "./analytics";
 
+/**
+ * "Not paid" including NULL. Prisma's `{ not: "paid" }` compiles to `<> 'paid'`,
+ * which is false for NULL — a hold that died before its payment started would
+ * never be swept and would burn its slot forever.
+ */
+const UNPAID = [{ stripePaymentStatus: null }, { stripePaymentStatus: { not: "paid" } }];
+
 /** The slot is gone. Surfaced to the booker as a clean 409. */
 export class SlotTakenError extends Error {
   code = "SLOT_TAKEN";
@@ -59,10 +66,11 @@ export class InvalidSlotError extends Error {
 
 /** Booking is impossible right now (calendar unreadable, host paused). Fail closed. */
 export class BookingUnavailableError extends Error {
-  code = "UNAVAILABLE";
-  constructor(message = "Booking is temporarily unavailable. Please try again shortly.") {
+  code: string;
+  constructor(message = "Booking is temporarily unavailable. Please try again shortly.", code = "UNAVAILABLE") {
     super(message);
     this.name = "BookingUnavailableError";
+    this.code = code;
   }
 }
 
@@ -95,8 +103,6 @@ export async function requireHost(): Promise<Host> {
 
 /** True when bookings cannot currently be taken (calendar not connected / revoked). */
 export function hostBookingBlocked(host: Host): boolean {
-  // The in-memory calendar (demo instance, tests, local UI work) needs no OAuth.
-  if (calendarBackend() === "memory") return false;
   return !host.googleRefreshToken || Boolean(host.googleAuthError);
 }
 
@@ -157,7 +163,7 @@ async function sweepExpiredHoldsInTx(tx: TxClient, hostId: string, now: Date): P
       hostId,
       status: "PENDING_PAYMENT",
       expiresAt: { lte: now },
-      stripePaymentStatus: { not: "paid" },
+      OR: UNPAID,
     },
     data: { status: "EXPIRED", expiresAt: null },
   });
@@ -292,9 +298,9 @@ async function reserveSlot(
   opts: { holdMinutes: number; paid: boolean }
 ): Promise<Booking> {
   const now = new Date();
-  if (pausedMessage(host, now)) throw new BookingUnavailableError(pausedMessage(host, now)!);
+  if (pausedMessage(host, now)) throw new BookingUnavailableError(pausedMessage(host, now)!, "PAUSED");
   if (hostBookingBlocked(host)) {
-    throw new BookingUnavailableError("Booking is temporarily unavailable. Please try again later.");
+    throw new BookingUnavailableError("Online booking is temporarily unavailable. Please email to arrange a time.", "CALENDAR_DISCONNECTED");
   }
 
   const link = await resolveSingleUseLink(mt, input.singleUseToken);
@@ -779,7 +785,7 @@ async function handlePostPaymentConflict(ctx: BookingCtx, detail: string): Promi
 /** Stripe `checkout.session.expired` — release the hold. */
 export async function expireBookingBySession(sessionId: string): Promise<void> {
   const res = await prisma.booking.updateMany({
-    where: { stripeSessionId: sessionId, status: "PENDING_PAYMENT", stripePaymentStatus: { not: "paid" } },
+    where: { stripeSessionId: sessionId, status: "PENDING_PAYMENT", OR: UNPAID },
     data: { status: "EXPIRED", expiresAt: null },
   });
   if (res.count) log.info("stripe-webhook", "hold_released", { sessionId });
@@ -901,6 +907,10 @@ export async function cancelBooking(
       await audit(booking.id, "calendar_deleted");
     } catch (err) {
       calendarRemoved = false;
+      await prisma.booking.update({
+        where: { id: booking.id },
+        data: { googleSyncError: "Calendar event could not be deleted yet (retrying automatically)" },
+      });
       await enqueue("calendar.delete", { eventId: booking.googleEventId }, { bookingId: booking.id, dedupeKey: `calendar.delete:${booking.id}:${booking.googleEventId}` });
       log.error("booking", "calendar_delete_failed_queued", { bookingId: booking.id, error: errorMessage(err) });
     }

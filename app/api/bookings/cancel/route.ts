@@ -13,6 +13,7 @@ export async function POST(req: Request) {
   }
   const body = await readJson<{ token?: unknown; reason?: unknown }>(req);
   const token = typeof body?.token === "string" ? body.token.trim() : "";
+  if (!token) return fail("Missing cancellation token.", 400, "BAD_TOKEN");
   const row = await findByManageToken(token);
   if (!row) return fail("This cancellation link is not valid.", 404, "NOT_FOUND");
   if (row.status === "CANCELLED") return ok({ alreadyCancelled: true, meetingTypeSlug: row.meetingType.slug });

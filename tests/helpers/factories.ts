@@ -6,6 +6,7 @@
  * reason about the availability grid.
  */
 import type { Host, MeetingType } from "@prisma/client";
+import type { MeetingTypeFull } from "../../lib/availability";
 import { DateTime } from "luxon";
 import { prisma } from "../../lib/db";
 import type { WeeklyHours } from "../../lib/types";
@@ -34,7 +35,7 @@ export async function createHost(overrides: Partial<Host> = {}): Promise<Host> {
 export async function createMeetingType(
   host: Host,
   overrides: Partial<MeetingType> = {}
-): Promise<MeetingType> {
+): Promise<MeetingTypeFull> {
   const slug = (overrides.slug as string) ?? `type-${Math.random().toString(36).slice(2, 9)}`;
   return prisma.meetingType.create({
     data: {
@@ -47,14 +48,17 @@ export async function createMeetingType(
       currency: "usd",
       weeklyHours: ALL_WEEK as object,
       daysInAdvance: 30,
-      minNoticeHours: 0,
-      bufferMinutes: 0,
+      minNoticeMinutes: 0,
+      bufferBeforeMinutes: 0,
+      bufferAfterMinutes: 0,
       dailyLimit: null,
+      reminderMinutes: [],
       questions: undefined,
       displayMode: "popup",
       active: true,
       ...overrides,
     } as never,
+    include: { schedule: true, brand: true },
   });
 }
 
@@ -62,7 +66,7 @@ export async function createMeetingType(
 export async function createPaidMeetingType(
   host: Host,
   overrides: Partial<MeetingType> = {}
-): Promise<MeetingType> {
+): Promise<MeetingTypeFull> {
   return createMeetingType(host, { priceCents: 6900, ...overrides });
 }
 
@@ -93,5 +97,9 @@ export function bookingInput(overrides: Partial<Record<string, unknown>> = {}) {
     startTime: Date;
     answers?: { label: string; answer: string }[];
     customAnswer?: string | null;
+    durationMinutes?: number;
+    guests?: string[];
+    singleUseToken?: string | null;
+    utm?: Record<string, string> | null;
   };
 }

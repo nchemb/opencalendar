@@ -140,7 +140,7 @@ describe("the live calendar is re-checked inside the lock", () => {
 describe("buffers reserve the space around a booking", () => {
   test("a neighbouring slot inside the buffer is refused", async () => {
     const host = await createHost();
-    const meetingType = await createMeetingType(host, { bufferMinutes: 15 });
+    const meetingType = await createMeetingType(host, { bufferBeforeMinutes: 15, bufferAfterMinutes: 15 });
     const startTime = slotAt(10);
 
     await createFreeBooking(host, meetingType, bookingInput({ startTime }));

@@ -56,7 +56,7 @@ vi.mock("../../lib/mailer", async (importOriginal) => {
 import { prisma } from "../../lib/db";
 import { GoogleApiError, GoogleAuthError } from "../../lib/calendar-types";
 import { deleteEvent, freeBusy } from "../../lib/google";
-import { hostBookingBlocked } from "../../lib/meeting-types";
+import { hostBookingBlocked } from "../../lib/booking";
 import { createHost } from "../helpers/factories";
 
 /** An auth error shaped the way google-auth-library reports a dead refresh token. */
@@ -173,5 +173,56 @@ describe("deleting an event", () => {
       Object.assign(new Error("server error"), { code: 500 })
     );
     await expect(deleteEvent(host, "evt-1")).rejects.toBeInstanceOf(GoogleApiError);
+  });
+});
+
+describe("multiple conflict calendars", () => {
+  test("busy time from every selected calendar blocks, merged into one list", async () => {
+    const host = await createHost({
+      googleAccessToken: "tok",
+      googleTokenExpiresAt: new Date(Date.now() + 3_600_000),
+      conflictCalendarIds: ["personal@example.test"],
+    });
+    googleState.freebusyQuery.mockResolvedValue({
+      data: {
+        calendars: {
+          primary: { busy: [{ start: "2026-09-03T15:00:00Z", end: "2026-09-03T16:00:00Z" }] },
+          "personal@example.test": { busy: [{ start: "2026-09-03T18:00:00Z", end: "2026-09-03T18:30:00Z" }] },
+        },
+      },
+    });
+    const busy = await freeBusy(host, FROM, TO);
+    expect(googleState.freebusyQuery.mock.calls[0][0].requestBody.items).toEqual([
+      { id: "primary" },
+      { id: "personal@example.test" },
+    ]);
+    expect(busy.map((b) => b.calendarId)).toEqual(["primary", "personal@example.test"]);
+  });
+
+  test("an error on any one calendar fails closed instead of reading it as free", async () => {
+    const host = await createHost({
+      googleAccessToken: "tok",
+      googleTokenExpiresAt: new Date(Date.now() + 3_600_000),
+      conflictCalendarIds: ["gone@example.test"],
+    });
+    googleState.freebusyQuery.mockResolvedValue({
+      data: {
+        calendars: {
+          primary: { busy: [] },
+          "gone@example.test": { errors: [{ reason: "notFound" }] },
+        },
+      },
+    });
+    await expect(freeBusy(host, FROM, TO)).rejects.toBeInstanceOf(GoogleApiError);
+  });
+
+  test("a calendar missing from the response fails closed", async () => {
+    const host = await createHost({
+      googleAccessToken: "tok",
+      googleTokenExpiresAt: new Date(Date.now() + 3_600_000),
+      conflictCalendarIds: ["silent@example.test"],
+    });
+    googleState.freebusyQuery.mockResolvedValue({ data: { calendars: { primary: { busy: [] } } } });
+    await expect(freeBusy(host, FROM, TO)).rejects.toBeInstanceOf(GoogleApiError);
   });
 });

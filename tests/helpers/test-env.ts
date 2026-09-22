@@ -34,6 +34,10 @@ const SAFE_ENV: Record<string, string | null> = {
   RESEND_FROM: null,
   ALERT_EMAIL: null,
   WEBHOOK_URL: null,
+  ALERT_WEBHOOK_URL: null,
+  CRON_SECRET: "test-cron-secret",
+  VERCEL: null,
+  TRUST_PROXY: null,
   WEBHOOK_SECRET: null,
   GOOGLE_CLIENT_ID: null,
   GOOGLE_CLIENT_SECRET: null,
@@ -73,6 +77,10 @@ export function assertNoLiveCredentials(): void {
   const stripeKey = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
   if (stripeKey.includes("_live_")) {
     throw new Error("Refusing to run: STRIPE_SECRET_KEY is a LIVE key.");
+  }
+
+  if (process.env.ALERT_WEBHOOK_URL?.trim()) {
+    throw new Error("Refusing to run: ALERT_WEBHOOK_URL is set — the suite would push real alerts.");
   }
 
   const webhook = process.env.WEBHOOK_URL?.trim();

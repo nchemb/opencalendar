@@ -85,6 +85,7 @@ describe("POST /api/demo/reset", () => {
     const host = await prisma.host.findFirstOrThrow({ where: { email: DEMO_HOST_EMAIL } });
     const meetingType = await prisma.meetingType.findFirstOrThrow({
       where: { slug: "intro-call" },
+      include: { schedule: true, brand: true },
     });
     await createFreeBooking(host, meetingType, bookingInput());
     expect(await prisma.booking.count()).toBe(1);
