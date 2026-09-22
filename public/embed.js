@@ -31,13 +31,37 @@
     }
   }
 
-  var ORIGIN = (function () {
+  // The trusted origin for every iframe src and every postMessage check. Read
+  // from the script's own src by default; a site whose CDN/proxy rewrites or
+  // strips that (or can't produce document.currentScript at all) sets
+  // data-bookkit-origin="https://your-instance" on the <script> tag instead.
+  // Deliberately NEVER falls back to window.location.origin — that would trust
+  // whatever page happened to load this file, defeating the point of an origin
+  // check.
+  var ORIGIN = null;
+  var declaredOrigin = script && script.getAttribute && script.getAttribute("data-bookkit-origin");
+  if (declaredOrigin) {
     try {
-      return new URL(script.src).origin;
+      ORIGIN = new URL(declaredOrigin).origin;
     } catch (e) {
-      return window.location.origin;
+      ORIGIN = null;
     }
-  })();
+  }
+  if (!ORIGIN && script && script.src) {
+    try {
+      ORIGIN = new URL(script.src).origin;
+    } catch (e) {
+      ORIGIN = null;
+    }
+  }
+  if (!ORIGIN) {
+    console.error(
+      "BookKit embed.js: could not determine the BookKit instance's origin " +
+        "(document.currentScript unavailable and no data-bookkit-origin attribute). " +
+        'Add data-bookkit-origin="https://your-instance" to the <script> tag. Refusing to mount.'
+    );
+    return;
+  }
 
   // ---------------------------------------------------------------------
   // Styles
@@ -197,10 +221,15 @@
     }
   }
 
+  // Clamped so a malformed or hostile bookkit:height message can't shrink the
+  // frame to nothing or stretch the host page to an absurd height.
+  var MIN_FRAME_HEIGHT = 200;
+  var MAX_FRAME_HEIGHT = 6000;
+
   function resizeFrame(embedId, height) {
     var rec = frames[embedId];
     if (!rec) return;
-    var h = Math.max(320, Number(height) || 0);
+    var h = Math.min(MAX_FRAME_HEIGHT, Math.max(MIN_FRAME_HEIGHT, Number(height) || 0));
     rec.el.style.height = h + "px";
   }
 
