@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import BookingWidget from "@/components/booking/BookingWidget";
+import { initialSlots } from "@/lib/ui/initial-slots";
 import { bumpMetric } from "@/lib/analytics";
 import { hostBookingBlocked } from "@/lib/booking";
 import { env } from "@/lib/env";
@@ -37,6 +38,10 @@ export default async function BookingPage({
   if (!found) notFound();
   const { meetingType, host } = found;
   const publicType = toPublic(meetingType, host);
+  const seedPromise = initialSlots(host, meetingType, {
+    link: typeof searchParams.link === "string" ? searchParams.link : null,
+    duration: typeof searchParams.duration === "string" ? Number(searchParams.duration) : null,
+  });
 
   if (!isBotUserAgent(headers().get("user-agent"))) {
     await bumpMetric(meetingType.id, "view", searchParams.utm_source as string | undefined);
@@ -45,6 +50,7 @@ export default async function BookingPage({
   return (
     <main className="min-h-dvh px-4 py-8 sm:py-14">
       <BookingWidget
+        initialSlots={await seedPromise}
         meetingType={publicType}
         hostEmail={host.email}
         blocked={hostBookingBlocked(host)}

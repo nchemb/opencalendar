@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import BookingWidget from "@/components/booking/BookingWidget";
+import { initialSlots } from "@/lib/ui/initial-slots";
 import { bumpMetric } from "@/lib/analytics";
 import { hostBookingBlocked } from "@/lib/booking";
 import { env } from "@/lib/env";
@@ -24,12 +25,16 @@ export default async function EmbedPage({
   if (!found) notFound();
   const { meetingType, host } = found;
   const publicType = toPublic(meetingType, host);
+  const seedPromise = initialSlots(host, meetingType, {
+    link: typeof searchParams.link === "string" ? searchParams.link : null,
+    duration: typeof searchParams.duration === "string" ? Number(searchParams.duration) : null,
+  });
   const bookingParams = parseBookingParams(
     searchParams,
     publicType.questions.map((q) => q.id)
   );
 
-  if (!isBotUserAgent(headers().get("user-agent"))) {
+  if (searchParams.preload !== "1" && !isBotUserAgent(headers().get("user-agent"))) {
     await bumpMetric(meetingType.id, "view", bookingParams.utm.utm_source);
   }
 
@@ -50,6 +55,7 @@ export default async function EmbedPage({
         }}
       />
       <BookingWidget
+        initialSlots={await seedPromise}
         meetingType={publicType}
         hostEmail={host.email}
         blocked={hostBookingBlocked(host)}

@@ -18,6 +18,8 @@ function post(msg: Record<string, unknown>) {
 }
 
 /** New `bookkit:*` message, plus the old v1 dotted name when one is given. */
+let shownCounted = false;
+
 export function emitEmbed(
   ctx: EmbedCtx,
   type: string,
@@ -66,6 +68,17 @@ export function useParentUtm(): Record<string, string> {
     function onMessage(e: MessageEvent) {
       if (trustedOrigin.current && e.origin !== trustedOrigin.current) return;
       const data = e.data as { type?: string; utm?: Record<string, string> };
+      if (data?.type === "bookkit:shown") {
+        const slug = window.location.pathname.split("/").pop();
+        if (slug && !shownCounted) {
+          shownCounted = true;
+          void fetch("/api/analytics/slot", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ slug, metric: "view" }),
+          }).catch(() => undefined);
+        }
+      }
       if (data?.type === "bookkit:parent_utm" && data.utm && typeof data.utm === "object") {
         setUtm((prev) => ({ ...prev, ...data.utm }));
       }

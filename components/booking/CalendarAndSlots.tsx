@@ -1,6 +1,7 @@
 "use client";
 
 import { DateTime } from "luxon";
+import type { InitialSlots } from "@/lib/ui/initial-slots";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatTime } from "@/lib/ui/format";
 import TimezoneCombobox from "./TimezoneCombobox";
@@ -22,6 +23,8 @@ type Props = {
   initialMonth?: string | null; // yyyy-MM
   initialDate?: string | null; // yyyy-MM-dd
   initialTz?: string | null;
+  /** Server-rendered slots for the bookable window (skips the first network round trip). */
+  initialSlots?: InitialSlots | null;
   /** Reschedule mode excludes the booking's own hold; slot count / grid look identical. */
   onSlotSelect: (iso: string) => void;
   onDateSelect?: (date: string) => void;
@@ -39,6 +42,7 @@ export default function CalendarAndSlots({
   initialMonth,
   initialDate,
   initialTz,
+  initialSlots,
   onSlotSelect,
   onDateSelect,
   onTimezoneChange,
@@ -55,6 +59,7 @@ export default function CalendarAndSlots({
 
   const dayRefs = useRef(new Map<string, HTMLButtonElement>());
   const inFlight = useRef(new Set<string>());
+  const seeded = useRef(new Set<string>());
 
   useEffect(() => {
     if (initialTz) onTimezoneChange?.(initialTz);
@@ -78,6 +83,25 @@ export default function CalendarAndSlots({
       const to = anchor.endOf("month");
       if (to < today) {
         setMonths((m) => ({ ...m, [key]: { slots: [] } }));
+        return;
+      }
+      // Serve from the server-rendered seed once per month, while it is fresh (60s).
+      if (
+        initialSlots &&
+        !linkToken &&
+        durationMinutes === initialSlots.duration &&
+        !seeded.current.has(key) &&
+        Date.now() - initialSlots.at < 60_000 &&
+        to.toMillis() <= Date.parse(initialSlots.until)
+      ) {
+        seeded.current.add(key);
+        const lo = from.startOf("day").toMillis();
+        const hi = to.toMillis();
+        const slots = initialSlots.slots.filter((s) => {
+          const t = Date.parse(s);
+          return t >= lo && t <= hi;
+        });
+        setMonths((m) => ({ ...m, [key]: { slots } }));
         return;
       }
       inFlight.current.add(key);
@@ -105,7 +129,7 @@ export default function CalendarAndSlots({
         inFlight.current.delete(key);
       }
     },
-    [ready, slug, timezone, durationMinutes, linkToken, today]
+    [ready, slug, timezone, durationMinutes, linkToken, today, initialSlots]
   );
 
   // Reset cached months when the query itself changes (tz/duration/link).

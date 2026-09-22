@@ -76,6 +76,7 @@
       "backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px;" +
       "opacity:0;transition:opacity .18s ease}" +
       ".bk-overlay.is-open{opacity:1}" +
+      ".bk-overlay.bk-preloaded{visibility:hidden;pointer-events:none}" +
       ".bk-modal{position:relative;width:100%;max-width:720px;max-height:min(88vh,780px);" +
       "border-radius:16px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;" +
       "box-shadow:0 24px 70px rgba(0,0,0,.5);background:#0b0b0c;" +
@@ -248,16 +249,25 @@
 
   var popupState = null; // { overlay, frame, close, embedId, prevFocus, prevOverflow }
 
-  function openPopup(slug, opts) {
-    if (!slug) throw new Error("BookKit.open(slug) needs a meeting type slug");
-    injectStyles();
-    closePopup();
+  var preloaded = null; // a hidden, already-loaded popup waiting for its first open
 
+  // UTMs don't change what loads, so a preloaded popup is reusable from any button;
+  // the clicked button's UTMs are sent in with bookkit:parent_utm on open.
+  function popupKey(slug, opts) {
+    var o = {};
+    for (var k in opts || {}) if (k !== "utm" && Object.prototype.hasOwnProperty.call(opts, k)) o[k] = opts[k];
+    return slug + "|" + JSON.stringify(o);
+  }
+
+  // Builds the overlay + iframe and puts it in the DOM (hidden). The iframe starts
+  // loading immediately; opening later only reveals it, so it never reloads.
+  function buildPopup(slug, opts) {
+    injectStyles();
     opts = opts || {};
     var embedId = genId();
 
     var overlay = document.createElement("div");
-    overlay.className = "bk-overlay";
+    overlay.className = "bk-overlay bk-preloaded";
     overlay.setAttribute("role", "dialog");
     overlay.setAttribute("aria-modal", "true");
     overlay.setAttribute("aria-label", "Book a meeting");
@@ -271,7 +281,8 @@
 
     var frame = document.createElement("iframe");
     frame.className = "bk-popup-iframe";
-    frame.src = buildEmbedUrl(slug, mergeEmbedId(opts, embedId));
+    // preload=1: the page doesn't count a view until the popup is actually shown.
+    frame.src = buildEmbedUrl(slug, mergeEmbedId(opts, embedId)) + "&preload=1";
     frame.title = "Book a meeting";
     frame.setAttribute("allow", "payment");
 
@@ -291,22 +302,57 @@
       if (e.target === overlay) closePopup();
     });
 
-    var prevFocus = document.activeElement;
-    var prevOverflow = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = "hidden";
     document.body.appendChild(overlay);
+    frames[embedId] = { el: frame, skeleton: skeleton, kind: "popup", ready: false };
+    return { overlay: overlay, frame: frame, close: close, embedId: embedId, key: popupKey(slug, opts), slug: slug, opts: opts };
+  }
+
+  /** Load a popup in the background so the first click opens instantly. */
+  function preloadPopup(slug, opts) {
+    if (!slug || !document.body) return;
+    var key = popupKey(slug, opts);
+    if ((preloaded && preloaded.key === key) || (popupState && popupState.key === key)) return;
+    if (preloaded && preloaded.overlay.parentNode) {
+      delete frames[preloaded.embedId];
+      preloaded.overlay.parentNode.removeChild(preloaded.overlay);
+    }
+    preloaded = buildPopup(slug, opts);
+  }
+
+  function openPopup(slug, opts) {
+    if (!slug) throw new Error("BookKit.open(slug) needs a meeting type slug");
+    opts = opts || {};
+    closePopup();
+
+    var st;
+    if (preloaded && preloaded.key === popupKey(slug, opts)) {
+      st = preloaded;
+      preloaded = null;
+    } else {
+      st = buildPopup(slug, opts);
+    }
+    st.overlay.classList.remove("bk-preloaded");
+
+    st.prevFocus = document.activeElement;
+    st.prevOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
 
     // Synchronous reflow + reveal, same reasoning as v1: never leave the popup
     // stuck at opacity 0 if a rAF callback gets throttled or deferred.
-    void overlay.offsetWidth;
-    overlay.classList.add("is-open");
+    void st.overlay.offsetWidth;
+    st.overlay.classList.add("is-open");
 
-    frames[embedId] = { el: frame, skeleton: skeleton, kind: "popup", ready: false };
-    armReadyFallback(embedId);
-    popupState = { overlay: overlay, frame: frame, close: close, embedId: embedId, prevFocus: prevFocus, prevOverflow: prevOverflow };
+    armReadyFallback(st.embedId);
+    popupState = st;
+    try {
+      if (opts.utm) st.frame.contentWindow.postMessage({ type: "bookkit:parent_utm", utm: opts.utm }, ORIGIN);
+      st.frame.contentWindow.postMessage({ type: "bookkit:shown" }, ORIGIN);
+    } catch (e) {
+      /* not loaded yet: the view is counted when it is */
+    }
 
-    close.focus();
-    return { close: closePopup, embedId: embedId };
+    st.close.focus();
+    return { close: closePopup, embedId: st.embedId };
   }
 
   function closePopup() {
@@ -319,6 +365,7 @@
     emit("close", { embedId: st.embedId });
     setTimeout(function () {
       if (st.overlay.parentNode) st.overlay.parentNode.removeChild(st.overlay);
+      if (st.slug && !preloaded) preloadPopup(st.slug, st.opts);
     }, 200);
     if (st.prevFocus && typeof st.prevFocus.focus === "function") {
       try {
@@ -572,6 +619,7 @@
     __bookkitEmbedV2: true,
     origin: ORIGIN,
     open: openPopup,
+    preload: preloadPopup,
     close: closePopup,
     inline: inline,
     badge: badge,

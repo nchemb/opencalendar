@@ -6,6 +6,7 @@ import type { BookingParams } from "@/lib/ui/params";
 import { money } from "@/lib/ui/format";
 import type { PublicMeetingType } from "@/lib/types";
 import { emitEmbed, useEmbedResize, useParentUtm, type EmbedCtx } from "@/lib/ui/embed";
+import type { InitialSlots } from "@/lib/ui/initial-slots";
 import CalendarAndSlots from "./CalendarAndSlots";
 import Confirmation, { type ConfirmedBooking } from "./Confirmation";
 import DetailsForm, { type DetailsPayload, type FormState } from "./DetailsForm";
@@ -22,6 +23,7 @@ type Props = {
   chrome?: boolean;
   stripePublishableKey?: string | null;
   params: BookingParams;
+  initialSlots?: InitialSlots | null;
 };
 
 type Step = "calendar" | "details" | "payment" | "confirming" | "confirmed";
@@ -36,6 +38,7 @@ export default function BookingWidget({
   chrome = true,
   stripePublishableKey = null,
   params,
+  initialSlots = null,
 }: Props) {
   const [step, setStep] = useState<Step>("calendar");
   const [durationMinutes, setDurationMinutes] = useState(
@@ -326,6 +329,7 @@ export default function BookingWidget({
           initialMonth={params.month}
           initialDate={params.date}
           initialTz={params.tz}
+          initialSlots={initialSlots}
           onSlotSelect={onSlotSelect}
           onDateSelect={onDateSelect}
           onTimezoneChange={setTimezone}

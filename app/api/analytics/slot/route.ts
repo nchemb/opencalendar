@@ -6,7 +6,7 @@ import { isSlug } from "@/lib/validate";
 
 export const dynamic = "force-dynamic";
 
-/** POST /api/analytics/slot — bumps the "slot selected" funnel counter. Slug only, no PII. */
+/** POST /api/analytics/slot — bumps a funnel counter ("slot" default, or "view" for preloaded popups). Slug only, no PII. */
 export async function POST(req: Request) {
   if (!rateLimit(`analytics-slot:${clientIp(req)}`, { limit: 60, windowMs: 60_000 }).allowed) {
     return fail("Too many requests.", 429, "RATE_LIMITED");
@@ -14,6 +14,7 @@ export async function POST(req: Request) {
   const body = await readJson<Record<string, unknown>>(req);
   if (!body || !isSlug(body.slug)) return fail("Invalid meeting type.", 400, "BAD_SLUG");
   const found = await findActiveMeetingType(body.slug);
-  if (found) await bumpMetric(found.meetingType.id, "slot", "");
+  const metric = body.metric === "view" ? "view" : "slot";
+  if (found) await bumpMetric(found.meetingType.id, metric, "");
   return ok({});
 }
