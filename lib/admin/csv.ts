@@ -2,8 +2,10 @@ import type { Booking, MeetingType } from "@prisma/client";
 import { DateTime } from "luxon";
 
 function cell(v: unknown): string {
-  const s = v === null || v === undefined ? "" : String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  let s = v === null || v === undefined ? "" : String(v);
+  // Neutralise spreadsheet formulas: an invitee named "=HYPERLINK(...)" must stay text.
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 const HEADERS = [

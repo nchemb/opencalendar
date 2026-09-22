@@ -23,8 +23,17 @@ export type JobKind =
   | "followup"
   | "refund";
 
-/** Thrown by a handler that should stop retrying (e.g. booking no longer exists). */
-export class PermanentJobError extends Error {}
+/**
+ * Thrown by a handler that should stop retrying. Silent by default (e.g. the
+ * booking no longer exists); pass { alert: true } when the host must fix something.
+ */
+export class PermanentJobError extends Error {
+  alert: boolean;
+  constructor(message: string, opts: { alert?: boolean } = {}) {
+    super(message);
+    this.alert = Boolean(opts.alert);
+  }
+}
 
 type Handler = (job: Job) => Promise<void>;
 const handlers = new Map<string, Handler>();
@@ -130,7 +139,7 @@ async function runOne(job: Job): Promise<"done" | "retry" | "dead"> {
       attempts: job.attempts,
       error: message,
     });
-    if (dead && !permanent) {
+    if (dead && (!permanent || (err as PermanentJobError).alert)) {
       const { raiseAlert } = await import("./alerts");
       await raiseAlert({
         kind: "job_dead",

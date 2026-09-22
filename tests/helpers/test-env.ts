@@ -35,6 +35,8 @@ const SAFE_ENV: Record<string, string | null> = {
   ALERT_EMAIL: null,
   WEBHOOK_URL: null,
   ALERT_WEBHOOK_URL: null,
+  // Webhook tests post to fake hostnames that don't resolve; the guard itself has unit tests.
+  ALLOW_PRIVATE_WEBHOOKS: "1",
   CRON_SECRET: "test-cron-secret",
   VERCEL: null,
   TRUST_PROXY: null,

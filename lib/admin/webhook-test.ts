@@ -1,12 +1,15 @@
 /** "Send test" button on a webhook endpoint: one signed synchronous delivery, not via the outbox. */
 import { prisma } from "../db";
 import { sign } from "../webhooks";
+import { assertPublicUrl } from "../net-guard";
 
 export async function sendTestWebhook(endpointId: string): Promise<{ ok: boolean; status?: number; error?: string }> {
   const ep = await prisma.webhookEndpoint.findUniqueOrThrow({ where: { id: endpointId } });
   const body = JSON.stringify({ event: "ping", createdAt: new Date().toISOString(), data: { message: "Test delivery from BookKit admin." } });
   try {
+    await assertPublicUrl(ep.url);
     const res = await fetch(ep.url, {
+      redirect: "manual",
       method: "POST",
       headers: {
         "Content-Type": "application/json",

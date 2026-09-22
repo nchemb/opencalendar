@@ -4,6 +4,7 @@ import { fail, ok, readJson } from "@/lib/http";
 import { errorMessage, log } from "@/lib/logger";
 import { ValidationError, parseWebhookEndpointInput } from "@/lib/meeting-type-input";
 import { newWebhookSecret, WEBHOOK_EVENTS } from "@/lib/webhooks";
+import { assertPublicUrl, BlockedUrlError } from "@/lib/net-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,12 @@ export async function POST(req: Request) {
   if (!body) return fail("Invalid request body.", 400, "BAD_BODY");
   try {
     const fields = parseWebhookEndpointInput(body, WEBHOOK_EVENTS);
+    try {
+      await assertPublicUrl(fields.url);
+    } catch (err) {
+      if (err instanceof BlockedUrlError) return fail(err.message, 400, "VALIDATION");
+      throw err;
+    }
     const secret = newWebhookSecret();
     const created = await prisma.webhookEndpoint.create({ data: { ...fields, secret } });
     log.info("admin", "webhook_endpoint_created", { id: created.id });

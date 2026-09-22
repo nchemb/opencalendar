@@ -10,7 +10,8 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { Booking, MeetingType } from "@prisma/client";
 import { prisma } from "./db";
-import { enqueue } from "./jobs";
+import { enqueue, PermanentJobError } from "./jobs";
+import { assertPublicUrl, BlockedUrlError } from "./net-guard";
 import { getSetting } from "./settings";
 import { manageUrl } from "./emails";
 
@@ -113,8 +114,15 @@ export async function deliverWebhook(payload: {
     secret = await getSetting("WEBHOOK_SECRET");
   }
 
+  try {
+    await assertPublicUrl(payload.url);
+  } catch (err) {
+    if (err instanceof BlockedUrlError) throw new PermanentJobError(`blocked webhook URL ${payload.url}: ${err.message}`, { alert: true });
+    throw err;
+  }
   const raw = JSON.stringify(payload.body);
   const res = await fetch(payload.url, {
+    redirect: "manual",
     method: "POST",
     headers: {
       "Content-Type": "application/json",
