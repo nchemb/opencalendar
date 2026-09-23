@@ -1,0 +1,6 @@
+# Local env files must never ship: Next reads .env at build time, so a local
+# BOOKKIT_CALENDAR=memory silently put production on the in-memory calendar.
+.env
+.env.*
+!.env.example
+.planning
