@@ -1,3 +1,4 @@
+import { DateTime } from "luxon";
 import { google, type calendar_v3 } from "googleapis";
 import type { Host } from "@prisma/client";
 import { prisma } from "./db";
@@ -225,14 +226,16 @@ async function destinationBusyExcept(
       maxResults: 250,
       pageToken,
     });
+    const tz = res.data.timeZone || "UTC";
     for (const e of res.data.items ?? []) {
       if (e.id === excludeEventId || e.status === "cancelled" || e.transparency === "transparent") continue;
       if (e.attendees?.some((a) => a.self && a.responseStatus === "declined")) continue;
-      // ponytail: all-day dates parse as UTC midnight, not calendar-tz midnight; off by the
-      // tz offset at the edges. Resolve with the calendar's timeZone if it ever matters.
-      const start = e.start?.dateTime ?? e.start?.date;
-      const end = e.end?.dateTime ?? e.end?.date;
-      if (start && end) out.push({ start: new Date(start), end: new Date(end), source: "calendar", calendarId });
+      // All-day events carry a bare date: midnight in the calendar's own time zone, not UTC.
+      const at = (t?: calendar_v3.Schema$EventDateTime) =>
+        t?.dateTime ? new Date(t.dateTime) : t?.date ? DateTime.fromISO(t.date, { zone: t.timeZone || tz }).toJSDate() : null;
+      const start = at(e.start ?? undefined);
+      const end = at(e.end ?? undefined);
+      if (start && end) out.push({ start, end, source: "calendar", calendarId });
     }
     pageToken = res.data.nextPageToken ?? undefined;
   } while (pageToken);

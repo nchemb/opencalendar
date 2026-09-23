@@ -259,12 +259,18 @@ export async function resolveSingleUseLink(
   let link = await prisma.singleUseLink.findUnique({ where: { token } });
   if (!link || link.meetingTypeId !== mt.id) throw new InvalidSlotError("This booking link is not valid.");
   // A hold that expired unpaid (Stripe expiry, cron or in-lock sweep) gives the link back.
+  // One statement, so a late payment that claims the booking first keeps the link.
+  // ponytail: a payment landing AFTER the release still confirms (the payer paid), so that
+  // link can end up behind two bookings. Rare (hold long expired); re-claim in settle if it bites.
   if (link.usedAt && link.bookingId) {
-    const held = await prisma.booking.findUnique({ where: { id: link.bookingId }, select: { status: true } });
-    if (!held || held.status === "EXPIRED") {
-      await prisma.singleUseLink.updateMany({ where: { id: link.id, bookingId: link.bookingId }, data: { usedAt: null, bookingId: null } });
-      link = { ...link, usedAt: null, bookingId: null };
-    }
+    const released = await prisma.$executeRaw`
+      UPDATE "SingleUseLink" SET "usedAt" = NULL, "bookingId" = NULL
+      WHERE id = ${link.id} AND "bookingId" = ${link.bookingId}
+        AND NOT EXISTS (
+          SELECT 1 FROM "Booking" b WHERE b.id = ${link.bookingId}
+            AND (b.status <> 'EXPIRED' OR b."stripePaymentStatus" = 'paid')
+        )`;
+    if (released) link = { ...link, usedAt: null, bookingId: null };
   }
   if (link.usedAt) throw new InvalidSlotError("This one-time booking link has already been used.");
   if (link.expiresAt && link.expiresAt.getTime() < Date.now()) {
@@ -500,18 +506,18 @@ async function queueReminders(booking: Booking, mt: MeetingType): Promise<void> 
     if (runAt < now + 10 * 60_000) continue;
     await enqueue(
       "reminder",
-      { minutes, startTime: booking.startTime.toISOString() },
-      { bookingId: booking.id, runAt: new Date(runAt), dedupeKey: `reminder:${booking.id}:${start}:${minutes}` }
+      { minutes, startTime: booking.startTime.toISOString(), rev: booking.rescheduleCount },
+      { bookingId: booking.id, runAt: new Date(runAt), dedupeKey: `reminder:${booking.id}:${start}:${minutes}:r${booking.rescheduleCount}` }
     );
   }
   if (mt.followUpMinutes) {
     await enqueue(
       "followup",
-      { startTime: booking.startTime.toISOString() },
+      { startTime: booking.startTime.toISOString(), rev: booking.rescheduleCount },
       {
         bookingId: booking.id,
         runAt: new Date(booking.endTime.getTime() + mt.followUpMinutes * 60_000),
-        dedupeKey: `followup:${booking.id}:${start}`,
+        dedupeKey: `followup:${booking.id}:${start}:r${booking.rescheduleCount}`,
       }
     );
   }

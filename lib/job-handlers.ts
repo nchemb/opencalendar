@@ -118,11 +118,12 @@ registerJobHandler("email", skippable(async (job) => {
 
 registerJobHandler("reminder", skippable(async (job) => {
   const ctx = { ...(await ctxOrStop(job)), mailKey: `job:${job.id}` };
-  const p = job.payload as { minutes: number; startTime: string };
+  const p = job.payload as { minutes: number; startTime: string; rev?: number };
   const { booking } = ctx;
-  // Stale: cancelled, rescheduled since, or already started.
+  // Stale: cancelled, rescheduled since (a later job owns this start), or already started.
   if (booking.status !== "CONFIRMED") return;
   if (booking.startTime.toISOString() !== p.startTime) return;
+  if (p.rev !== undefined && p.rev !== booking.rescheduleCount) return;
   if (booking.startTime.getTime() <= Date.now()) return;
   await mustSend(() => sendReminder(ctx, p.minutes), "reminder");
   await audit(booking.id, "reminder_sent", { minutes: p.minutes });
@@ -130,9 +131,10 @@ registerJobHandler("reminder", skippable(async (job) => {
 
 registerJobHandler("followup", skippable(async (job) => {
   const ctx = { ...(await ctxOrStop(job)), mailKey: `job:${job.id}` };
-  const p = job.payload as { startTime: string };
+  const p = job.payload as { startTime: string; rev?: number };
   if (ctx.booking.status !== "CONFIRMED" || ctx.booking.noShow) return;
   if (ctx.booking.startTime.toISOString() !== p.startTime) return;
+  if (p.rev !== undefined && p.rev !== ctx.booking.rescheduleCount) return;
   await mustSend(() => sendFollowUp(ctx), "follow-up");
   await audit(ctx.booking.id, "followup_sent");
 }));

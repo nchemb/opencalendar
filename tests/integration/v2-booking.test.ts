@@ -140,6 +140,25 @@ describe("reschedule", () => {
     const reminderMails = sendMail.mock.calls.filter(([a]) => a.subject.startsWith("Reminder"));
     expect(reminderMails).toHaveLength(1);
   });
+
+  test("A→B→A→B still sends exactly one reminder for B", async () => {
+    withMail();
+    const host = await createHost();
+    const mt = await createMeetingType(host, { reminderMinutes: [60] });
+    const a = slotAt(10, 3);
+    const b = slotAt(15, 3);
+    const booking = await createFreeBooking(host, mt, bookingInput({ startTime: a }));
+    await rescheduleBooking(booking.id, b, "invitee");
+    // The first B reminder runs (and skips) while the booking sits back at A.
+    await rescheduleBooking(booking.id, a, "invitee");
+    await prisma.job.updateMany({ where: { bookingId: booking.id, kind: "reminder" }, data: { runAt: new Date() } });
+    await drainJobs({ budgetMs: 5_000 });
+    await rescheduleBooking(booking.id, b, "invitee");
+    await prisma.job.updateMany({ where: { bookingId: booking.id, kind: "reminder", doneAt: null }, data: { runAt: new Date() } });
+    sendMail.mockClear();
+    await drainJobs({ budgetMs: 5_000 });
+    expect(sendMail.mock.calls.filter(([m]) => m.subject.startsWith("Reminder"))).toHaveLength(1);
+  });
 });
 
 describe("cancellation policy and refunds", () => {
