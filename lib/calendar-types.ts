@@ -78,8 +78,12 @@ export type CalendarPort = {
    * Busy blocks on the host calendar. MUST throw rather than return empty on
    * failure — every caller fails closed, and a silent empty array reads as
    * "totally free", which is how double bookings happen.
+   *
+   * `excludeEventId` (reschedule): leave out exactly that event on the destination
+   * calendar. Freebusy merges overlapping events and carries no ids, so cutting the
+   * booking's time range instead would also hide any other event inside it.
    */
-  freeBusy(host: Host, timeMin: Date, timeMax: Date): Promise<BusyInterval[]>;
+  freeBusy(host: Host, timeMin: Date, timeMax: Date, excludeEventId?: string): Promise<BusyInterval[]>;
 
   /** Create the event, retrying transient failures. Auth failures are terminal. */
   createEventWithRetry(

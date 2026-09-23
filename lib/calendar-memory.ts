@@ -65,11 +65,11 @@ function overlaps(a: BusyInterval, start: Date, end: Date): boolean {
 }
 
 export const memoryCalendar: CalendarPort = {
-  async freeBusy(_host: Host, timeMin: Date, timeMax: Date): Promise<BusyInterval[]> {
+  async freeBusy(_host: Host, timeMin: Date, timeMax: Date, excludeEventId?: string): Promise<BusyInterval[]> {
     if (faults.authError) throw faults.authError;
     if (faults.freeBusyError) throw faults.freeBusyError;
 
-    const own = [...events.values()].map((e) => ({
+    const own = [...events.values()].filter((e) => e.eventId !== excludeEventId).map((e) => ({
       start: e.start,
       end: e.end,
       source: "calendar" as const,

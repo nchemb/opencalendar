@@ -82,7 +82,7 @@ function skippable(fn: (job: Job) => Promise<void>) {
 }
 
 registerJobHandler("email", skippable(async (job) => {
-  const ctx = await ctxOrStop(job);
+  const ctx = { ...(await ctxOrStop(job)), mailKey: `job:${job.id}` };
   const p = job.payload as { template?: string; refunded?: boolean };
   switch (p.template) {
     case "confirmation":
@@ -117,7 +117,7 @@ registerJobHandler("email", skippable(async (job) => {
 }));
 
 registerJobHandler("reminder", skippable(async (job) => {
-  const ctx = await ctxOrStop(job);
+  const ctx = { ...(await ctxOrStop(job)), mailKey: `job:${job.id}` };
   const p = job.payload as { minutes: number; startTime: string };
   const { booking } = ctx;
   // Stale: cancelled, rescheduled since, or already started.
@@ -129,7 +129,7 @@ registerJobHandler("reminder", skippable(async (job) => {
 }));
 
 registerJobHandler("followup", skippable(async (job) => {
-  const ctx = await ctxOrStop(job);
+  const ctx = { ...(await ctxOrStop(job)), mailKey: `job:${job.id}` };
   const p = job.payload as { startTime: string };
   if (ctx.booking.status !== "CONFIRMED" || ctx.booking.noShow) return;
   if (ctx.booking.startTime.toISOString() !== p.startTime) return;

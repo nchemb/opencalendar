@@ -15,6 +15,8 @@ export type BookingCtx = {
   booking: Booking;
   meetingType: MeetingType & { brand?: Brand | null };
   host: Host;
+  /** Set by the outbox: provider idempotency key, so a retried job never mails twice. */
+  mailKey?: string;
 };
 
 export function formatWhen(instant: Date, timezone: string): string {
@@ -165,6 +167,7 @@ export async function sendInviteeConfirmation(ctx: BookingCtx): Promise<boolean>
     .join("\n");
 
   return sendMail({
+    idempotencyKey: ctx.mailKey,
     to: booking.email,
     subject: `Confirmed: ${meetingType.name} on ${DateTime.fromJSDate(booking.startTime, { zone: booking.timezone }).toFormat("ccc LLL d 'at' h:mm a")}`,
     html,
@@ -187,6 +190,7 @@ export async function sendHostNotification(ctx: BookingCtx): Promise<boolean> {
   const utm = booking.utm as Record<string, string> | null;
   const source = utm ? Object.entries(utm).map(([k, v]) => `${k}=${v}`).join(" · ") : null;
   return sendMail({
+    idempotencyKey: ctx.mailKey,
     to: host.email,
     subject: `New booking: ${booking.name}, ${meetingType.name} (${DateTime.fromJSDate(booking.startTime, { zone: host.timezone }).toFormat("ccc LLL d, h:mm a")})`,
     html: emailShell(`
@@ -212,6 +216,7 @@ export async function sendCancellation(ctx: BookingCtx, to: "invitee" | "host"):
   const rebook = `${appUrl()}/${meetingType.slug}`;
   const title = to === "host" ? `Cancelled: ${booking.name}, ${meetingType.name}` : `Cancelled: ${meetingType.name}`;
   return sendMail({
+    idempotencyKey: ctx.mailKey,
     to: to === "host" ? host.email : booking.email,
     subject: `${title} (${DateTime.fromJSDate(booking.startTime, { zone: tz }).toFormat("ccc LLL d, h:mm a")})`,
     html: emailShell(
@@ -238,6 +243,7 @@ export async function sendRescheduled(ctx: BookingCtx, to: "invitee" | "host"): 
   const when = formatWhen(booking.startTime, tz);
   const was = booking.previousStartTime ? formatWhen(booking.previousStartTime, tz) : null;
   return sendMail({
+    idempotencyKey: ctx.mailKey,
     to: to === "host" ? host.email : booking.email,
     subject: `Rescheduled: ${meetingType.name}${to === "host" ? ` with ${booking.name}` : ""} → ${DateTime.fromJSDate(booking.startTime, { zone: tz }).toFormat("ccc LLL d, h:mm a")}`,
     html: emailShell(
@@ -268,6 +274,7 @@ export async function sendReminder(ctx: BookingCtx, minutesBefore: number): Prom
         ? `in ${Math.round(minutesBefore / 60)} hour${minutesBefore >= 120 ? "s" : ""}`
         : `in ${minutesBefore} minutes`;
   return sendMail({
+    idempotencyKey: ctx.mailKey,
     to: booking.email,
     subject: `Reminder: ${meetingType.name} ${lead}`,
     html: emailShell(
@@ -290,6 +297,7 @@ export async function sendFollowUp(ctx: BookingCtx): Promise<boolean> {
   const { booking, meetingType } = ctx;
   const rebook = `${appUrl()}/${meetingType.slug}`;
   return sendMail({
+    idempotencyKey: ctx.mailKey,
     to: booking.email,
     subject: `Thanks for the call, ${booking.name.split(" ")[0]}`,
     html: emailShell(
@@ -311,6 +319,7 @@ export async function sendConflictApology(ctx: BookingCtx, refunded: boolean): P
   const when = formatWhen(booking.startTime, booking.timezone);
   const rebook = `${appUrl()}/${meetingType.slug}`;
   return sendMail({
+    idempotencyKey: ctx.mailKey,
     to: booking.email,
     subject: `That time was taken: ${meetingType.name}`,
     html: emailShell(

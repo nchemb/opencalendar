@@ -26,7 +26,7 @@ import {
   typeCounts,
   type MeetingTypeFull,
 } from "./availability";
-import { weekKey, subtractInterval } from "./slots";
+import { weekKey } from "./slots";
 import { calendar } from "./calendar";
 import { GoogleApiError, GoogleAuthError } from "./calendar-types";
 import { errorMessage, log } from "./logger";
@@ -256,8 +256,16 @@ export async function resolveSingleUseLink(
   token: string | null | undefined
 ): Promise<SingleUseLink | null> {
   if (!token) return null;
-  const link = await prisma.singleUseLink.findUnique({ where: { token } });
+  let link = await prisma.singleUseLink.findUnique({ where: { token } });
   if (!link || link.meetingTypeId !== mt.id) throw new InvalidSlotError("This booking link is not valid.");
+  // A hold that expired unpaid (Stripe expiry, cron or in-lock sweep) gives the link back.
+  if (link.usedAt && link.bookingId) {
+    const held = await prisma.booking.findUnique({ where: { id: link.bookingId }, select: { status: true } });
+    if (!held || held.status === "EXPIRED") {
+      await prisma.singleUseLink.updateMany({ where: { id: link.id, bookingId: link.bookingId }, data: { usedAt: null, bookingId: null } });
+      link = { ...link, usedAt: null, bookingId: null };
+    }
+  }
   if (link.usedAt) throw new InvalidSlotError("This one-time booking link has already been used.");
   if (link.expiresAt && link.expiresAt.getTime() < Date.now()) {
     throw new InvalidSlotError("This one-time booking link has expired.");
@@ -979,11 +987,10 @@ export async function rescheduleBooking(
       const limit = await limitReachedInTx(tx, mt, host, newStart, now, booking.id);
       if (limit && by === "invitee") throw new SlotTakenError(limit);
 
-      // Our own event is in freebusy; carve it out so a booking never blocks its own move.
-      const busy = subtractInterval(await calendar().freeBusy(host, guardStart, guardEnd), {
-        start: booking.startTime,
-        end: booking.endTime,
-      });
+      // A booking never blocks its own move: drop exactly its calendar event (by id, not
+      // by time range, which would also hide other events inside the old slot). No event
+      // id = the event was never written, so nothing of ours is on the calendar.
+      const busy = await calendar().freeBusy(host, guardStart, guardEnd, fresh.googleEventId ?? undefined);
       if (busy.some((b) => b.start.getTime() < guardEnd.getTime() && b.end.getTime() > guardStart.getTime())) {
         throw new SlotTakenError();
       }
@@ -1012,14 +1019,15 @@ export async function rescheduleBooking(
       await calendar().updateEvent(host, updated.googleEventId, { startTime: newStart, endTime: newEnd });
       await audit(booking.id, "calendar_updated");
     } catch (err) {
-      await enqueue("calendar.update", {}, { bookingId: booking.id, dedupeKey: `calendar.update:${booking.id}:${newStart.getTime()}`, maxAttempts: 20 });
+      await enqueue("calendar.update", {}, { bookingId: booking.id, dedupeKey: `calendar.update:${booking.id}:${newStart.getTime()}:r${updated.rescheduleCount}`, maxAttempts: 20 });
       await sendCalendarPendingAlert(updated, host, `reschedule not yet on calendar: ${errorMessage(err)}`);
     }
   } else {
     // The original write never landed; the pending calendar.create job reads the new time.
   }
 
-  const stamp = newStart.getTime();
+  // Per-change key: A→B→A→B must notify on the second move to B too.
+  const stamp = `${newStart.getTime()}:r${updated.rescheduleCount}`;
   await enqueue("email", { template: "rescheduled_invitee" }, { bookingId: booking.id, dedupeKey: `email:rescheduled_invitee:${booking.id}:${stamp}` });
   if (by === "invitee") {
     await enqueue("email", { template: "rescheduled_host" }, { bookingId: booking.id, dedupeKey: `email:rescheduled_host:${booking.id}:${stamp}` });

@@ -93,7 +93,7 @@ export async function queueWebhooks(
       {
         bookingId: booking.id,
         // One delivery per endpoint per event per booking state.
-        dedupeKey: `webhook:${t.endpointId ?? "legacy"}:${event}:${booking.id}:${booking.startTime.getTime()}:${booking.status}`,
+        dedupeKey: `webhook:${t.endpointId ?? "legacy"}:${event}:${booking.id}:${booking.startTime.getTime()}:${booking.status}:r${booking.rescheduleCount}`,
       }
     );
   }

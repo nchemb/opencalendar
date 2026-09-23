@@ -90,6 +90,15 @@ describe("reschedule", () => {
     expect(moved.startTime.getTime()).toBe(half.getTime());
   });
 
+  test("a separate calendar event inside the old slot still blocks the move", async () => {
+    const host = await createHost();
+    const mt = await createMeetingType(host, { durationMinutes: 60, startIncrementMinutes: 30 });
+    const booking = await createFreeBooking(host, mt, bookingInput({ startTime: slotAt(10) }));
+    const half = new Date(slotAt(10).getTime() + 30 * 60_000);
+    memoryCalendarControl.setExternalBusy([{ start: half, end: new Date(half.getTime() + 15 * 60_000) }]);
+    await expect(rescheduleBooking(booking.id, half, "invitee")).rejects.toBeInstanceOf(SlotTakenError);
+  });
+
   test("into a busy slot → SlotTakenError, booking unchanged", async () => {
     const host = await createHost();
     const mt = await createMeetingType(host);
@@ -211,6 +220,16 @@ describe("single-use links, durations, guests, locations, limits", () => {
     await expect(
       createFreeBooking(host, mt, bookingInput({ singleUseToken: "tok_single_use_1234567890", startTime: slotAt(14) }))
     ).rejects.toBeInstanceOf(InvalidSlotError);
+  });
+
+  test("a paid hold that expires unpaid gives the single-use link back", async () => {
+    const host = await createHost();
+    const mt = await createPaidMeetingType(host);
+    await prisma.singleUseLink.create({ data: { token: "tok_abandoned_pay_1234567", meetingTypeId: mt.id } });
+    const { booking } = await startPaidIntent(host, mt, bookingInput({ singleUseToken: "tok_abandoned_pay_1234567" }));
+    await prisma.booking.update({ where: { id: booking.id }, data: { status: "EXPIRED", expiresAt: null } });
+    const again = await startPaidIntent(host, mt, bookingInput({ singleUseToken: "tok_abandoned_pay_1234567", startTime: slotAt(14) }));
+    expect(again.booking.status).toBe("PENDING_PAYMENT");
   });
 
   test("an expired single-use link is refused", async () => {

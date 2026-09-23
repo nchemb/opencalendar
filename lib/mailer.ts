@@ -20,6 +20,8 @@ export type MailArgs = {
   /** Display name for the From header (e.g. the brand). The address stays RESEND_FROM's. */
   fromName?: string;
   attachments?: { filename: string; content: string; contentType?: string }[];
+  /** Resend dedupes sends with the same key for 24h (outbox retries). */
+  idempotencyKey?: string;
 };
 
 /** "Name <addr>" with the display name swapped, keeping the configured address. */
@@ -60,7 +62,12 @@ export async function sendMail(args: MailArgs): Promise<boolean> {
       html: args.html,
       text: args.text,
       ...(args.replyTo ? { replyTo: args.replyTo } : {}),
-    });
+    }, args.idempotencyKey ? { idempotencyKey: args.idempotencyKey } : undefined);
+    // Same key, different body: an earlier attempt already sent this email.
+    if (res.error?.name === "invalid_idempotent_request") {
+      log.info("mailer", "already_sent", { subject: args.subject });
+      return true;
+    }
     if (res.error) {
       log.error("mailer", "send_failed", {
         subject: args.subject,

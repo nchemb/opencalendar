@@ -148,10 +148,12 @@ export function conflictCalendars(host: Host): string[] {
 export async function freeBusy(
   host: Host,
   timeMin: Date,
-  timeMax: Date
+  timeMax: Date,
+  excludeEventId?: string
 ): Promise<BusyInterval[]> {
   const calendar = await calendarClient(host);
   const ids = conflictCalendars(host);
+  const dest = host.googleCalendarId || "primary";
 
   try {
     const res = await calendar.freebusy.query({
@@ -171,12 +173,14 @@ export async function freeBusy(
           `freebusy (${id}): ${cal.errors.map((e) => e.reason).join(", ")}`
         );
       }
+      if (excludeEventId && id === dest) continue; // read event-by-event below
       for (const b of cal.busy ?? []) {
         if (b.start && b.end) {
           out.push({ start: new Date(b.start), end: new Date(b.end), source: "calendar", calendarId: id });
         }
       }
     }
+    if (excludeEventId) out.push(...(await destinationBusyExcept(calendar, dest, timeMin, timeMax, excludeEventId)));
     return out;
   } catch (err) {
     if (err instanceof GoogleApiError || err instanceof GoogleAuthError) throw err;
@@ -199,6 +203,40 @@ async function wrap<T>(host: Host, what: string, fn: () => Promise<T>): Promise<
     }
     throw new GoogleApiError(`${what} failed: ${errorMessage(err)}`);
   }
+}
+
+/** Destination-calendar busy time, event by event, minus one event (mirrors freebusy: skips free/transparent and cancelled). */
+async function destinationBusyExcept(
+  calendar: calendar_v3.Calendar,
+  calendarId: string,
+  timeMin: Date,
+  timeMax: Date,
+  excludeEventId: string
+): Promise<BusyInterval[]> {
+  const out: BusyInterval[] = [];
+  let pageToken: string | undefined;
+  do {
+    const res = await calendar.events.list({
+      calendarId,
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: true,
+      showDeleted: false,
+      maxResults: 250,
+      pageToken,
+    });
+    for (const e of res.data.items ?? []) {
+      if (e.id === excludeEventId || e.status === "cancelled" || e.transparency === "transparent") continue;
+      if (e.attendees?.some((a) => a.self && a.responseStatus === "declined")) continue;
+      // ponytail: all-day dates parse as UTC midnight, not calendar-tz midnight; off by the
+      // tz offset at the edges. Resolve with the calendar's timeZone if it ever matters.
+      const start = e.start?.dateTime ?? e.start?.date;
+      const end = e.end?.dateTime ?? e.end?.date;
+      if (start && end) out.push({ start: new Date(start), end: new Date(end), source: "calendar", calendarId });
+    }
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return out;
 }
 
 export async function updateEvent(host: Host, eventId: string, args: UpdateEventArgs): Promise<void> {
