@@ -11,8 +11,6 @@ you want it to, and never loses or double-books a meeting.
   <img src="docs/screenshots/readme/booking-page.png" alt="A paid booking page on OpenCalendar" width="820">
 </p>
 
-Runs in production at [book.buildwithneej.com](https://book.buildwithneej.com/u/buildwithneej),
-embedded on [buildwithneej.com](https://www.buildwithneej.com) and [goalphaflow.com](https://www.goalphaflow.com).
 
 **Why it exists:** booking links are revenue infrastructure. If one breaks quietly you lose
 calls you'll never know about. OpenCalendar is built around that: every booking is claimed under
@@ -50,8 +48,8 @@ outbox, and anything that goes wrong shows up as an alert, not a log line.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/readme/embed-popup.jpg" alt="Popup embed on buildwithneej.com"><br><sub><b>Popup embed.</b> One script tag; opens instantly because it preloads.</sub></td>
-    <td width="50%"><img src="docs/screenshots/readme/embed-inline.jpg" alt="Inline embed on goalphaflow.com"><br><sub><b>Inline embed.</b> Sizes itself to its content and takes each brand's colors.</sub></td>
+    <td width="50%"><img src="docs/screenshots/readme/embed-popup.jpg" alt="Popup embed on a website"><br><sub><b>Popup embed.</b> One script tag; opens instantly because it preloads.</sub></td>
+    <td width="50%"><img src="docs/screenshots/readme/embed-inline.jpg" alt="Inline embed on a website"><br><sub><b>Inline embed.</b> Sizes itself to its content and takes each brand's colors.</sub></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/readme/admin-overview.png" alt="Admin overview with system health"><br><sub><b>Overview.</b> System health, today's calls, revenue, one-click pause.</sub></td>

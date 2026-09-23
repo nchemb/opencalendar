@@ -49,7 +49,7 @@ model Host {
   updatedAt DateTime @updatedAt
 }
 
-/// A site or persona the host books under (e.g. "Build with Neej", "AlphaFlow").
+/// A site or persona the host books under (e.g. a personal brand and an agency).
 /// Owns branding and the public profile page at /u/<slug>.
 model Brand {
   id     String @id @default(cuid())

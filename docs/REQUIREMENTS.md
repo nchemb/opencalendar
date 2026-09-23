@@ -216,7 +216,7 @@ product cannot have. Every section below is subordinate to section R.
 - J6 P1 Analytics: views → started → booked funnel per link, bookings by source/UTM, revenue,
   cancellations/no-shows, last 7/30/90 days.
 - J7 P1 CSV export of bookings.
-- J8 P1 Brands: multiple brands (e.g. buildwithneej, goalphaflow), each with its own name, logo,
+- J8 P1 Brands: multiple brands (e.g. a personal brand and a consulting company), each with its own name, logo,
   accent, profile slug, reply-to email; event types belong to a brand.
 
 ## K. Privacy & data
@@ -238,15 +238,3 @@ product cannot have. Every section below is subordinate to section R.
   window, questions, price) from a Calendly public profile URL.
 - L6 P0 MIT license, CONTRIBUTING, SECURITY, CI green.
 - L7 P1 Demo mode (in-memory calendar, daily reset) for a public demo instance.
-
-## M. Owner rollout (P0, local first)
-
-- M1 Brands `buildwithneej` and `alphaflow`. Event types: `strategy-call` ($69, 30 min, rolling
-  7 days, Meet, 1 optional long-text question) on buildwithneej; `alphaflow-consulting-intake`
-  (free, 30 min, rolling 7 days, Meet, same question) on alphaflow; `general-meeting-neej`
-  (free, secret, 60 days) on buildwithneej. Schedule Mon–Fri 09:30–16:00 America/Chicago, 30-min
-  increments.
-- M2 buildwithneej.com and goalphaflow.com swap every Calendly link/embed for OpenCalendar, locally,
-  on branches — no prod push without explicit owner approval.
-- M3 Parallel soak: Calendly stays live until OpenCalendar has taken real bookings on both sites for
-  a week with zero incidents; then cancel Calendly.
