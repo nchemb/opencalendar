@@ -7,7 +7,9 @@
 Google Calendar, takes bookings from any website or social bio, charges with Stripe when
 you want it to, and never loses or double-books a meeting.
 
-![The booking page](docs/screenshots/v2/booking-desktop.png)
+<p align="center">
+  <img src="docs/screenshots/readme/booking-page.png" alt="A paid booking page on OpenCalendar" width="820">
+</p>
 
 Runs in production at [book.buildwithneej.com](https://book.buildwithneej.com/u/buildwithneej),
 embedded on [buildwithneej.com](https://www.buildwithneej.com) and [goalphaflow.com](https://www.goalphaflow.com).
@@ -43,6 +45,29 @@ outbox, and anything that goes wrong shows up as an alert, not a log line.
 - **Analytics** — views → time picked → booked, by source, plus revenue, cancellations and
   no-shows. No cookies, no trackers.
 - **Your data, your database.** No accounts, no vendor, no per-seat pricing. MIT licensed.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/readme/embed-popup.jpg" alt="Popup embed on buildwithneej.com"><br><sub><b>Popup embed.</b> One script tag; opens instantly because it preloads.</sub></td>
+    <td width="50%"><img src="docs/screenshots/readme/embed-inline.jpg" alt="Inline embed on goalphaflow.com"><br><sub><b>Inline embed.</b> Sizes itself to its content and takes each brand's colors.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/readme/admin-overview.png" alt="Admin overview with system health"><br><sub><b>Overview.</b> System health, today's calls, revenue, one-click pause.</sub></td>
+    <td><img src="docs/screenshots/readme/admin-analytics.png" alt="Analytics funnel"><br><sub><b>Analytics.</b> Views → time picked → booked, per event type and source.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/readme/admin-bookings.png" alt="Bookings list"><br><sub><b>Bookings.</b> Search, filter, refund, reschedule, export CSV.</sub></td>
+    <td><img src="docs/screenshots/readme/admin-event-type.png" alt="Event type editor"><br><sub><b>Event types.</b> Price, durations, windows, buffers, questions, policies.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/readme/admin-share.png" alt="Share panel with embed snippets"><br><sub><b>Share.</b> Every embed snippet, a UTM builder and a QR code.</sub></td>
+    <td align="center"><img src="docs/screenshots/readme/booking-mobile.png" alt="Booking page on a phone" width="260"><br><sub><b>Mobile.</b> Built for traffic from social bios.</sub></td>
+  </tr>
+</table>
+
+Admin screenshots use made-up demo data.
 
 ## Self-host in ~20 minutes
 
