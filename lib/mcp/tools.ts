@@ -71,7 +71,7 @@ export const TOOLS: Tool[] = [
   {
     name: "list_event_types",
     description:
-      "List every bookable event type (meeting link) on this BookKit instance: name, slug, duration, " +
+      "List every bookable event type (meeting link) on this OpenCalendar instance: name, slug, duration, " +
       "price and questions asked. Call this first to find the `slug` needed by every other tool.",
     inputSchema: { type: "object", properties: {} },
     handler: async () => {

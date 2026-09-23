@@ -1,16 +1,16 @@
-# BookKit
+# OpenCalendar
 
-[![CI](https://github.com/nchemb/bookkit/actions/workflows/ci.yml/badge.svg)](https://github.com/nchemb/bookkit/actions/workflows/ci.yml)
+[![CI](https://github.com/nchemb/opencalendar/actions/workflows/ci.yml/badge.svg)](https://github.com/nchemb/opencalendar/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-An open-source, self-hosted Calendly replacement. One Next.js app that reads your real
+**The open-source Calendly alternative.** Self-hosted: one Next.js app that reads your real
 Google Calendar, takes bookings from any website or social bio, charges with Stripe when
 you want it to, and never loses or double-books a meeting.
 
 ![The booking page](docs/screenshots/v2/booking-desktop.png)
 
 **Why it exists:** booking links are revenue infrastructure. If one breaks quietly you lose
-calls you'll never know about. BookKit is built around that: every booking is claimed under
+calls you'll never know about. OpenCalendar is built around that: every booking is claimed under
 a database lock against your live calendar, every side effect is retried from a durable
 outbox, and anything that goes wrong shows up as an alert, not a log line.
 
@@ -113,7 +113,7 @@ Every row has tests behind it (`npm test` runs them against a real Postgres).
 | Calendar write fails after the slot is claimed | The booking stays confirmed (it's the invitee's slot), a `calendar.create` job retries with backoff, and you get a critical alert until the event lands. | `calendar-failure` |
 | An email, webhook, reminder or refund fails | Everything after the booking row is a job in a durable outbox, claimed with `SKIP LOCKED`, retried with backoff, and turned into an alert if it finally dies. Nothing is dropped silently. | `v2-booking`, `v2-ops` |
 | Payment lands on a slot someone else took | Hold (33 min) outlives the Stripe session (31 min). If it still happens: automatic refund, apology email, alert. | `paid-booking` |
-| A Stripe webhook is late, duplicated, forged, or from another app on the same account | Signature-verified; claimed once with a conditional update; ignored unless it matches an object BookKit created; and the booking page and cron **pull** payment status from Stripe, so a missing webhook never strands a payer. | `stripe-webhook`, `paid-booking`, `v2-booking` |
+| A Stripe webhook is late, duplicated, forged, or from another app on the same account | Signature-verified; claimed once with a conditional update; ignored unless it matches an object OpenCalendar created; and the booking page and cron **pull** payment status from Stripe, so a missing webhook never strands a payer. | `stripe-webhook`, `paid-booking`, `v2-booking` |
 | An abandoned hold burns a slot | Holds expire lazily and are swept inside the booking lock and by the cron — including holds that died before payment ever started. | `paid-booking`, `v2-ops` |
 | Your booking page silently offers nothing | A canary checks every public link can read the calendar and has open times; you're alerted if not. `/api/health` returns 503 for uptime monitors. | `v2-ops` |
 | You delete or move a booked meeting in Google by hand | Reconcile notices and alerts you with the booking, so the invitee gets told. | `v2-ops` |
@@ -142,7 +142,7 @@ is one file plus a line in `lib/calendar.ts`.
 
 ## Not included
 
-Round robin, collective and team scheduling, group events, meeting polls, SMS. BookKit is a
+Round robin, collective and team scheduling, group events, meeting polls, SMS. OpenCalendar is a
 tool for one person running one or more brands. If you need teams,
 [Cal.com](https://cal.com) is open source and does them well.
 

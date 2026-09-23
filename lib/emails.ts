@@ -1,5 +1,5 @@
 /**
- * Every email BookKit sends about a booking. Plain functions that render and send;
+ * Every email OpenCalendar sends about a booking. Plain functions that render and send;
  * callers run them through the outbox (lib/job-handlers.ts) so a failed send is
  * retried rather than lost.
  */
@@ -202,7 +202,7 @@ export async function sendHostNotification(ctx: BookingCtx): Promise<boolean> {
     `),
     text: [`New booking: ${meetingType.name}`, `When: ${when}`, `Who: ${booking.name} <${booking.email}>`, whereText(booking) ?? "", "", answersText(booking), source ? `Source: ${source}` : ""].join("\n"),
     replyTo: booking.email,
-    fromName: "BookKit",
+    fromName: "OpenCalendar",
   });
 }
 
@@ -210,7 +210,7 @@ export async function sendCancellation(ctx: BookingCtx, to: "invitee" | "host"):
   const { booking, meetingType, host } = ctx;
   const tz = to === "host" ? host.timezone : booking.timezone;
   const when = formatWhen(booking.startTime, tz);
-  const by = booking.cancelledBy === "host" ? hostName(host) : booking.cancelledBy === "invitee" ? booking.name : "BookKit";
+  const by = booking.cancelledBy === "host" ? hostName(host) : booking.cancelledBy === "invitee" ? booking.name : "OpenCalendar";
   const reason = booking.cancelReason?.trim();
   const refunded = booking.stripePaymentStatus === "refunded";
   const rebook = `${appUrl()}/${meetingType.slug}`;
@@ -232,7 +232,7 @@ export async function sendCancellation(ctx: BookingCtx, to: "invitee" | "host"):
     ),
     text: [title, when, `Cancelled by ${by}.`, reason ? `Reason: ${reason}` : "", to === "invitee" ? `Book a new time: ${rebook}` : ""].join("\n"),
     replyTo: to === "host" ? booking.email : replyTo(ctx),
-    fromName: to === "host" ? "BookKit" : brandName(ctx),
+    fromName: to === "host" ? "OpenCalendar" : brandName(ctx),
     ...(to === "invitee" && !booking.googleEventId ? { attachments: [icsAttachment(ctx, "cancel.ics")] } : {}),
   });
 }
@@ -259,7 +259,7 @@ export async function sendRescheduled(ctx: BookingCtx, to: "invitee" | "host"): 
     ),
     text: [`Rescheduled: ${meetingType.name}`, was ? `Was: ${was}` : "", `Now: ${when}`, whereText(booking) ?? "", to === "invitee" ? `Manage: ${manageUrl(booking)}` : ""].join("\n"),
     replyTo: to === "host" ? booking.email : replyTo(ctx),
-    fromName: to === "host" ? "BookKit" : brandName(ctx),
+    fromName: to === "host" ? "OpenCalendar" : brandName(ctx),
     ...(to === "invitee" && !booking.googleEventId ? { attachments: [icsAttachment(ctx)] } : {}),
   });
 }

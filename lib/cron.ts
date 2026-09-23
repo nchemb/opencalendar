@@ -104,7 +104,7 @@ export async function runCanary(): Promise<{ checked: number; problems: string[]
       severity: "warning",
       title: "Email is not configured",
       message:
-        "RESEND_API_KEY / RESEND_FROM are not set, so invitees get no confirmation or reminder emails from BookKit (Google still sends its invite) and alerts only reach this dashboard. Set ALERT_WEBHOOK_URL too if you want push alerts.",
+        "RESEND_API_KEY / RESEND_FROM are not set, so invitees get no confirmation or reminder emails from OpenCalendar (Google still sends its invite) and alerts only reach this dashboard. Set ALERT_WEBHOOK_URL too if you want push alerts.",
       key: "email_not_configured",
     });
   } else {

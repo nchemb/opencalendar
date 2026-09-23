@@ -32,7 +32,7 @@ export default function LoginForm() {
 
   return (
     <form onSubmit={submit} className="bk-card p-7 w-full max-w-sm">
-      <h1 className="text-lg font-semibold mb-1">BookKit admin</h1>
+      <h1 className="text-lg font-semibold mb-1">OpenCalendar admin</h1>
       <p className="text-[var(--bk-muted)] text-sm mb-5">Enter your admin password.</p>
 
       <label className="bk-label" htmlFor="pw">Password</label>

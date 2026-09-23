@@ -35,11 +35,11 @@ export function openApiDocument() {
   return {
     openapi: "3.1.0",
     info: {
-      title: "BookKit API",
+      title: "OpenCalendar API",
       version: "1",
       description:
         "Self-hosted booking API. List event types, check availability, and create, look up, " +
-        "cancel or reschedule bookings. Authenticate with a BookKit API key.",
+        "cancel or reschedule bookings. Authenticate with a OpenCalendar API key.",
     },
     servers: [{ url: `${appUrl()}/api/v1` }],
     security: [{ ApiKey: [] }],

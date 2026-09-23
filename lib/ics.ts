@@ -42,7 +42,7 @@ export function buildIcs(item: CalendarItem): string {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//BookKit//EN",
+    "PRODID:-//OpenCalendar//EN",
     "CALSCALE:GREGORIAN",
     `METHOD:${item.cancelled ? "CANCEL" : "PUBLISH"}`,
     "BEGIN:VEVENT",

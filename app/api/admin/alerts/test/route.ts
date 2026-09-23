@@ -12,7 +12,7 @@ export async function POST() {
   try {
     const host = await getHost();
     await raiseAlert(
-      { kind: "test", severity: "info", title: "Test alert", message: "This is a test alert from BookKit admin settings.", key: `test:${Date.now()}` },
+      { kind: "test", severity: "info", title: "Test alert", message: "This is a test alert from OpenCalendar admin settings.", key: `test:${Date.now()}` },
       host
     );
     return ok({ sent: true });

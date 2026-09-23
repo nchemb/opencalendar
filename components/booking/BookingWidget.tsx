@@ -340,7 +340,7 @@ export default function BookingWidget({
         <p className="text-center text-xs text-[var(--bk-muted)] mt-4">
           Powered by{" "}
           <a href="https://github.com/nchemb/bookkit" className="underline" target="_blank" rel="noreferrer">
-            BookKit
+            OpenCalendar
           </a>
         </p>
       )}

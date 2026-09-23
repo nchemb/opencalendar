@@ -10,7 +10,7 @@ export default async function Image({ params }: { params: { slug: string } }) {
   const mt = found ? toPublic(found.meetingType, found.host) : null;
 
   const accent = mt?.color || "#FF6A00";
-  const brandName = mt?.brand?.name || mt?.hostName || "BookKit";
+  const brandName = mt?.brand?.name || mt?.hostName || "OpenCalendar";
   const avatar = mt?.brand?.logoUrl || mt?.hostAvatarUrl;
 
   return new ImageResponse(

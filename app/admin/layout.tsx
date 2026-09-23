@@ -8,7 +8,7 @@ import LogoutButton from "./LogoutButton";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "BookKit admin", robots: { index: false } };
+export const metadata = { title: "OpenCalendar admin", robots: { index: false } };
 
 const NAV = [
   { href: "/admin", label: "Overview" },
@@ -47,7 +47,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <header className="border-b border-[var(--bk-border)] sticky top-0 bg-[var(--bk-bg)]/95 backdrop-blur z-10">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-5">
           <Link href="/admin" className="font-semibold tracking-tight">
-            BookKit
+            OpenCalendar
           </Link>
           <nav className="flex items-center gap-4 text-sm overflow-x-auto">
             {NAV.map((item) => (

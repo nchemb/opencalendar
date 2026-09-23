@@ -58,7 +58,7 @@ export default async function Home() {
           Open source · MIT
         </p>
         <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight leading-[1.08] mb-5">
-          BookKit
+          OpenCalendar
           <span className="block text-[var(--bk-muted)] font-normal text-2xl sm:text-3xl mt-2.5">
             Calendly, replaced with something you own.
           </span>
@@ -133,7 +133,7 @@ npm run dev`}
 
       <footer className="border-t border-[var(--bk-border)]">
         <div className="max-w-3xl mx-auto px-5 py-6 flex flex-wrap gap-4 items-center text-sm text-[var(--bk-muted)]">
-          <span>BookKit — MIT licensed</span>
+          <span>OpenCalendar — MIT licensed</span>
           <a className="ml-auto hover:text-[var(--bk-fg)]" href={REPO} target="_blank" rel="noreferrer">
             GitHub
           </a>

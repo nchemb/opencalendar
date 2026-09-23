@@ -97,7 +97,7 @@ export async function getHost(): Promise<Host | null> {
 
 export async function requireHost(): Promise<Host> {
   const host = await getHost();
-  if (!host) throw new BookingUnavailableError("This BookKit instance is not set up yet.");
+  if (!host) throw new BookingUnavailableError("This OpenCalendar instance is not set up yet.");
   return host;
 }
 
@@ -406,7 +406,7 @@ export async function loadCtx(bookingId: string): Promise<BookingCtx & { meeting
 function eventDescription(ctx: BookingCtx): string {
   const { booking, meetingType } = ctx;
   const loc = booking.location as LocationOption | null;
-  const lines = [`Booked via BookKit: ${meetingType.name}`, "", `Name: ${booking.name}`, `Email: ${booking.email}`];
+  const lines = [`Booked via OpenCalendar: ${meetingType.name}`, "", `Name: ${booking.name}`, `Email: ${booking.email}`];
   if (booking.guests.length) lines.push(`Guests: ${booking.guests.join(", ")}`);
   lines.push(`Their timezone: ${booking.timezone}`);
   if (loc && loc.kind !== "google_meet") lines.push(`Location: ${locationLabel(loc)}${loc.value ? ` — ${loc.value}` : ""}`);

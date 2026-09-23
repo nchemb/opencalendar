@@ -166,7 +166,7 @@ function Editor({ value, onClose }: { value: EditableBrand; onClose: () => void 
 
         <label className="flex items-center gap-2 text-sm mt-5">
           <input type="checkbox" checked={form.showPoweredBy} onChange={(e) => set("showPoweredBy", e.target.checked)} />
-          Show &ldquo;Powered by BookKit&rdquo;
+          Show &ldquo;Powered by OpenCalendar&rdquo;
         </label>
 
         {error && <p className="text-sm mt-4" style={{ color: "var(--bk-danger)" }}>{error}</p>}

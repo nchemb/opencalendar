@@ -67,7 +67,7 @@ export async function resetDemoData(): Promise<{ host: string; meetingTypes: num
     update: { googleAuthError: null },
     create: {
       email: DEMO_HOST_EMAIL,
-      displayName: "BookKit Demo",
+      displayName: "OpenCalendar Demo",
       timezone: "America/Chicago",
       // Demo mode never calls Google, but a host still has to look connected.
       googleRefreshToken: "demo-instance-no-google",
@@ -78,7 +78,7 @@ export async function resetDemoData(): Promise<{ host: string; meetingTypes: num
   const brand = await prisma.brand.upsert({
     where: { slug: "demo" },
     update: {},
-    create: { hostId: host.id, slug: "demo", name: "BookKit Demo", tagline: "Book a fake meeting. Resets daily.", accentColor: "#FF6A00" },
+    create: { hostId: host.id, slug: "demo", name: "OpenCalendar Demo", tagline: "Book a fake meeting. Resets daily.", accentColor: "#FF6A00" },
   });
 
   for (const type of DEMO_TYPES) {

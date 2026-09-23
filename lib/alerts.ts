@@ -119,7 +119,7 @@ async function notifyEmail(input: AlertInput, host?: Pick<Host, "email"> | null)
   const cta = input.cta ?? `${appUrl()}/admin`;
   return sendMail({
     to,
-    subject: `${tag} BookKit — ${input.title}`,
+    subject: `${tag} OpenCalendar — ${input.title}`,
     html: emailShell(
       `<h2 style="margin:0 0 14px;font-size:17px;color:${input.severity === "critical" ? "#d92d20" : "#b54708"}">${escapeHtml(input.title)}</h2>` +
         input.message
@@ -140,7 +140,7 @@ async function notifyWebhook(input: AlertInput): Promise<boolean> {
   const url = env("ALERT_WEBHOOK_URL");
   if (!url) return false;
   const cta = input.cta ?? `${appUrl()}/admin`;
-  const text = `${input.severity === "critical" ? "🚨" : "⚠️"} BookKit: ${input.title}\n${input.message}\n${cta}`;
+  const text = `${input.severity === "critical" ? "🚨" : "⚠️"} OpenCalendar: ${input.title}\n${input.message}\n${cta}`;
   let init: RequestInit;
   if (url.includes("hooks.slack.com")) {
     init = { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) };
@@ -154,7 +154,7 @@ async function notifyWebhook(input: AlertInput): Promise<boolean> {
     init = {
       method: "POST",
       headers: {
-        Title: `BookKit: ${input.title}`.replace(/[^\x20-\x7E]/g, ""),
+        Title: `OpenCalendar: ${input.title}`.replace(/[^\x20-\x7E]/g, ""),
         Priority: input.severity === "critical" ? "5" : "4",
         Click: cta,
       },

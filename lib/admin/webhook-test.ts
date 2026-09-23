@@ -5,7 +5,7 @@ import { assertPublicUrl } from "../net-guard";
 
 export async function sendTestWebhook(endpointId: string): Promise<{ ok: boolean; status?: number; error?: string }> {
   const ep = await prisma.webhookEndpoint.findUniqueOrThrow({ where: { id: endpointId } });
-  const body = JSON.stringify({ event: "ping", createdAt: new Date().toISOString(), data: { message: "Test delivery from BookKit admin." } });
+  const body = JSON.stringify({ event: "ping", createdAt: new Date().toISOString(), data: { message: "Test delivery from OpenCalendar admin." } });
   try {
     await assertPublicUrl(ep.url);
     const res = await fetch(ep.url, {

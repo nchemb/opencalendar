@@ -105,7 +105,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: { g
         <p className="text-sm text-[var(--bk-muted)]">
           {hasResend() && env("RESEND_FROM")
             ? `Configured — sending as ${env("RESEND_FROM")}.`
-            : "Not fully configured. Set RESEND_API_KEY and RESEND_FROM, or invitees get no confirmation/reminder emails from BookKit (Google's own invite still sends)."}
+            : "Not fully configured. Set RESEND_API_KEY and RESEND_FROM, or invitees get no confirmation/reminder emails from OpenCalendar (Google's own invite still sends)."}
         </p>
       </section>
 
@@ -146,7 +146,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: { g
 
       <section className="bk-card p-5">
         <h2 className="font-semibold mb-1">Data</h2>
-        <p className="text-sm text-[var(--bk-muted)] mb-4">Delete or export everything BookKit stored for one invitee email. Google calendar events are left untouched.</p>
+        <p className="text-sm text-[var(--bk-muted)] mb-4">Delete or export everything OpenCalendar stored for one invitee email. Google calendar events are left untouched.</p>
         <DataPrivacy />
       </section>
 

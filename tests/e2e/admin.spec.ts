@@ -6,7 +6,7 @@ import { adminNavigate, db, fillDetails, loginAsAdmin, pickFirstSlot } from "./h
 test.describe("admin dashboard", () => {
   test("the dashboard is behind the password", async ({ page }) => {
     await page.goto("/admin");
-    await expect(page.getByRole("heading", { name: "BookKit admin" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "OpenCalendar admin" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Event types" })).toHaveCount(0);
   });
 
@@ -25,7 +25,7 @@ test.describe("admin dashboard", () => {
     await expect(page.getByText("System health")).toBeVisible();
 
     await page.getByRole("button", { name: /log out|sign out/i }).click();
-    await expect(page.getByRole("heading", { name: "BookKit admin" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "OpenCalendar admin" })).toBeVisible({ timeout: 15_000 });
   });
 
   test("a new event type can be created and is immediately bookable", async ({ page }) => {
