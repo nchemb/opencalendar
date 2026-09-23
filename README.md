@@ -85,6 +85,14 @@ your booking pages down with it.
 Coming from Calendly? `npm run import:calendly -- https://calendly.com/<you>` copies your
 event types, questions, prices and hours. See [docs/MIGRATE-FROM-CALENDLY.md](docs/MIGRATE-FROM-CALENDLY.md).
 
+### Admin password
+
+`/admin` has one owner login: the `ADMIN_PASSWORD` environment variable. `npm run setup`
+generates a random one, prints it once and saves it in `.env`; in production set it in your
+host's env vars. There is no "forgot password" email on purpose: whoever can change the env var
+owns the instance, so recovery is "set a new `ADMIN_PASSWORD` and redeploy". The password also
+signs the session cookie, so changing it logs out every browser (so does **Log out everywhere**).
+
 ## Put it on your site
 
 ```html
