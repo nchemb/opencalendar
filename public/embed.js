@@ -234,12 +234,22 @@
     rec.el.style.height = h + "px";
   }
 
-  // A frame that never signals ready (network hiccup, blocked script) shouldn't
-  // stay skeletonized forever.
+  // A frame that never signals ready (network hiccup, blocked frame) must not leave
+  // a blank box: keep the skeleton and put a direct link to the booking page on it.
   var READY_FALLBACK_MS = 8000;
   function armReadyFallback(embedId) {
     setTimeout(function () {
-      markReady(embedId);
+      var rec = frames[embedId];
+      if (!rec || rec.ready || !rec.skeleton || rec.skeleton.querySelector("a")) return;
+      var a = document.createElement("a");
+      a.href = rec.el.src.replace("/embed/", "/").replace(/[?&]preload=1/, "");
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = "Calendar not loading? Open the booking page \u2192";
+      a.style.cssText = "color:#fff;font:500 14px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-decoration:underline;padding:16px;text-align:center";
+      rec.skeleton.removeAttribute("aria-hidden");
+      rec.skeleton.style.cssText += ";display:flex;align-items:center;justify-content:center;animation:none";
+      rec.skeleton.appendChild(a);
     }, READY_FALLBACK_MS);
   }
 
