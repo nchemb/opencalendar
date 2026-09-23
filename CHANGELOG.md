@@ -4,6 +4,18 @@ All notable changes are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] — 2026-09-22
+
+Renamed from BookKit to **OpenCalendar**; the embed API, events, webhook header and env var
+names are unchanged, so existing embeds keep working.
+
+- Schedules with date overrides, business-day windows, per-type limits, buffers and increments.
+- Invitee reschedule and cancel with an enforced cutoff and automatic refunds by policy.
+- Durable outbox with retries and alerts (email, webhook push), cron tick, canary and reconcile.
+- Inline Stripe payments with pull-based confirmation; safe on a shared Stripe account.
+- Brands, single-use links, embed.js popup preloading, REST API v1, MCP server, `import:calendly`.
+- Admin: bookings, event types, availability troubleshooter, analytics, webhooks, API keys, data export/delete.
+
 ## [0.1.0] — first public release
 
 The first release anyone else can run. Everything below the "Fixed" heading was
@@ -49,4 +61,4 @@ found by writing the test suite for behaviour the README already claimed.
 - **Admin form labels were not associated with their inputs** — inert for screen
   readers and unclickable.
 
-[0.1.0]: https://github.com/nchemb/bookkit/releases/tag/v0.1.0
+[0.1.0]: https://github.com/nchemb/opencalendar/releases/tag/v0.1.0

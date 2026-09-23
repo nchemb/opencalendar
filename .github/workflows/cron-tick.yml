@@ -1,4 +1,4 @@
-name: BookKit cron tick
+name: OpenCalendar cron tick
 
 # Runs /api/cron/tick every 10 minutes. This is the option for hosts on a plan
 # that only allows daily Vercel Crons (e.g. Hobby) — see docs/RELIABILITY.md.

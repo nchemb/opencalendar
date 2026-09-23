@@ -58,7 +58,7 @@ BookKit-Signature: t=1759345402,v1=5257a869...
 ## Verifying the signature
 
 `v1` is `HMAC-SHA256("<t>.<raw request body>", your_endpoint_secret)`, hex
-encoded. Reject anything outside a tolerance window (BookKit's own reference
+encoded. Reject anything outside a tolerance window (OpenCalendar's own reference
 verifier uses 300s) to block replay.
 
 **Node**

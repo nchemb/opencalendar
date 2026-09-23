@@ -1,6 +1,6 @@
 # Contributing
 
-BookKit is deliberately a solo-operator tool. The fastest way to get a change
+OpenCalendar is deliberately a solo-operator tool. The fastest way to get a change
 merged is one that keeps it that way — see [Scope](#scope) below.
 
 ## Getting set up
@@ -8,7 +8,7 @@ merged is one that keeps it that way — see [Scope](#scope) below.
 You need Node 22+, Docker (for Postgres), and about five minutes.
 
 ```bash
-git clone https://github.com/nchemb/bookkit.git
+git clone https://github.com/nchemb/opencalendar.git
 cd bookkit
 npm install
 cp .env.example .env
@@ -94,7 +94,7 @@ stay that way.
 
 ## Scope
 
-Things BookKit deliberately does not do: multi-host and round-robin, SMS
+Things OpenCalendar deliberately does not do: multi-host and round-robin, SMS
 reminders, group events, two-way calendar sync, waitlists, teams, billing plans.
 
 These are not on a roadmap, and pull requests adding them will most likely be

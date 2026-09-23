@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-const REPO = "https://github.com/nchemb/bookkit";
+const REPO = "https://github.com/nchemb/opencalendar";
 
 const FEATURES = [
   {

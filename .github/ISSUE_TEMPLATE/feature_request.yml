@@ -1,11 +1,11 @@
 name: Feature request
-description: Suggest something BookKit should do
+description: Suggest something OpenCalendar should do
 labels: [enhancement]
 body:
   - type: markdown
     attributes:
       value: |
-        BookKit is deliberately small. Multi-host, round-robin, SMS reminders,
+        OpenCalendar is deliberately small. Multi-host, round-robin, SMS reminders,
         group events, two-way sync and waitlists are out of scope on purpose —
         see [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md#scope).
 
@@ -13,7 +13,7 @@ body:
     id: problem
     attributes:
       label: The problem
-      description: What are you trying to do that BookKit makes hard today?
+      description: What are you trying to do that OpenCalendar makes hard today?
     validations:
       required: true
 

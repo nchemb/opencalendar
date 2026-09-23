@@ -24,7 +24,7 @@ export default function DemoBanner() {
       Demo instance — book anything you like. Nothing reaches a real calendar,
       payments are disabled, and bookings are wiped daily.{" "}
       <a
-        href="https://github.com/nchemb/bookkit"
+        href="https://github.com/nchemb/opencalendar"
         style={{ color: "#0b0b0c", textDecoration: "underline" }}
       >
         Self-host it

@@ -5,17 +5,17 @@
 Please do not open a public issue.
 
 Report privately through
-[GitHub's advisory form](https://github.com/nchemb/bookkit/security/advisories/new),
+[GitHub's advisory form](https://github.com/nchemb/opencalendar/security/advisories/new),
 which is the fastest route and keeps the disclosure private until there is a fix.
 
 Include what you did, what happened, and what you expected. A proof of concept
 against a local instance is ideal. Expect an acknowledgement within a few days.
 
-BookKit is maintained by one person as a side project, with no paid support and
+OpenCalendar is maintained by one person as a side project, with no paid support and
 no bounty programme. Fixes for anything that exposes booker data or lets an
 unauthenticated caller act as the host will be prioritised over everything else.
 
-## What BookKit assumes about your deployment
+## What OpenCalendar assumes about your deployment
 
 Self-hosting means these are yours to get right:
 

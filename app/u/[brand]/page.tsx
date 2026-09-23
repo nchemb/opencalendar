@@ -82,7 +82,7 @@ export default async function BrandPage({ params }: { params: { brand: string } 
         {brand.showPoweredBy && (
           <p className="mt-10 text-xs text-[var(--bk-muted)]">
             Powered by{" "}
-            <a href="https://github.com/nchemb/bookkit" className="underline" target="_blank" rel="noreferrer">
+            <a href="https://github.com/nchemb/opencalendar" className="underline" target="_blank" rel="noreferrer">
               OpenCalendar
             </a>
           </p>

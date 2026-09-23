@@ -28,8 +28,8 @@ If your site uses Calendly's widget:
 <script src="https://assets.calendly.com/assets/external/widget.js"></script>
 ```
 
-change it to BookKit's, and add a map from each Calendly URL to the matching
-BookKit slug — `embed.js` upgrades your existing `.calendly-inline-widget`
+change it to OpenCalendar's, and add a map from each Calendly URL to the matching
+OpenCalendar slug — `embed.js` upgrades your existing `.calendly-inline-widget`
 divs and `Calendly.initPopupWidget(...)` calls automatically, so you don't
 have to touch the markup:
 
@@ -43,7 +43,7 @@ have to touch the markup:
 ```
 
 `<a href="https://calendly.com/your-profile/strategy-call">` links that appear
-in your mapping also get intercepted and opened as BookKit popups. Once
+in your mapping also get intercepted and opened as OpenCalendar popups. Once
 you've verified everything, you can migrate the markup itself to native
 BookKit (`data-bookkit-popup="strategy-call"`) — see `docs/EMBED.md` — and
 drop the map.
@@ -51,22 +51,22 @@ drop the map.
 ## 3. Run both in parallel for a week
 
 Keep the Calendly link live somewhere (a low-traffic page, or just don't
-cancel the Calendly plan yet) while BookKit takes real bookings from your main
+cancel the Calendly plan yet) while OpenCalendar takes real bookings from your main
 site and socials. Check `/admin` daily: bookings landing correctly, calendar
 events created, confirmation emails sending, no entries in the
 needs-attention queue. `docs/RELIABILITY.md` explains what's being checked
 and how to get alerted if something breaks.
 
-Only cancel Calendly once BookKit has taken real bookings on every site you
+Only cancel Calendly once OpenCalendar has taken real bookings on every site you
 moved, with zero incidents, for at least a week.
 
-## What BookKit does that Calendly doesn't
+## What OpenCalendar does that Calendly doesn't
 
 - **Enforced cancellation cutoff** — Calendly's cancellation policy is just
   text on the page; nothing stops an invitee cancelling one minute before a
-  meeting. BookKit's `cancelCutoffHours` actually blocks it.
+  meeting. OpenCalendar's `cancelCutoffHours` actually blocks it.
 - **Automatic refunds** — Calendly never processes refunds; you do it by hand
-  in Stripe. BookKit refunds automatically on a policy-eligible cancel, and on
+  in Stripe. OpenCalendar refunds automatically on a policy-eligible cancel, and on
   the rare post-payment slot conflict.
 - **QR codes** — generate one per booking link from `/admin`, no separate
   tool.
@@ -75,7 +75,7 @@ moved, with zero incidents, for at least a week.
 - **Self-hosted data** — every booking, answer and webhook lives in your own
   Postgres. Nothing about your invitees passes through a third party.
 
-## What Calendly has that BookKit (v2) doesn't
+## What Calendly has that OpenCalendar (v2) doesn't
 
 Group/round-robin/collective events, meeting polls, Outlook/iCloud calendar
 sync, SMS reminders, and routing forms are out of scope for this version — see

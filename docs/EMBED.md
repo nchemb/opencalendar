@@ -1,4 +1,4 @@
-# Embedding BookKit
+# Embedding OpenCalendar
 
 One script, `embed.js`, covers every style below. Full contract (URL params,
 postMessage events, the JS API): `docs/EMBED-PROTOCOL.md`.

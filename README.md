@@ -9,6 +9,9 @@ you want it to, and never loses or double-books a meeting.
 
 ![The booking page](docs/screenshots/v2/booking-desktop.png)
 
+Runs in production at [book.buildwithneej.com](https://book.buildwithneej.com/u/buildwithneej),
+embedded on [buildwithneej.com](https://www.buildwithneej.com) and [goalphaflow.com](https://www.goalphaflow.com).
+
 **Why it exists:** booking links are revenue infrastructure. If one breaks quietly you lose
 calls you'll never know about. OpenCalendar is built around that: every booking is claimed under
 a database lock against your live calendar, every side effect is retried from a durable
@@ -47,7 +50,7 @@ You need Postgres, a Google account, somewhere to run Next.js (Vercel works), an
 only if you charge.
 
 ```bash
-git clone https://github.com/nchemb/bookkit.git && cd bookkit
+git clone https://github.com/nchemb/opencalendar.git && cd opencalendar
 npm install
 npm run setup     # writes .env, starts local Postgres, migrates, seeds, tells you what's missing
 npm run dev
@@ -104,6 +107,10 @@ signs the session cookie, so changing it logs out every browser (so does **Log o
 <!-- inline, sizes itself to its content -->
 <div data-bookkit-inline="strategy-call"></div>
 ```
+
+The project was called BookKit before it was renamed, so the embed API keeps that name
+(`window.BookKit`, `data-bookkit-*`, `bookkit:*` events, the `BookKit-Signature` webhook header
+and `BOOKKIT_*` env vars). Existing embeds keep working.
 
 Social bio: link to `https://<your-domain>/u/<brand>`. Everything else (badge, React,
 Webflow, WordPress, Framer, Squarespace, email signature, analytics events) is in

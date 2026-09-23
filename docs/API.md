@@ -12,7 +12,7 @@ Every endpoint except `openapi.json` needs an API key, created in
 Authorization: Bearer bk_live_xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-Keys are stored hashed — BookKit shows you the token once, at creation. A
+Keys are stored hashed — OpenCalendar shows you the token once, at creation. A
 revoked or unknown key gets `401 { ok: false, error, code: "UNAUTHORIZED" }`.
 
 ## Response shape

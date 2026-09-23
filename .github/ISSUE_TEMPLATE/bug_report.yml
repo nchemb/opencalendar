@@ -69,7 +69,7 @@ body:
     attributes:
       label: Relevant logs
       description: >
-        BookKit logs one JSON object per line. Lines from the `booking`,
+        OpenCalendar logs one JSON object per line. Lines from the `booking`,
         `stripe-webhook` or `google` components are usually the useful ones.
         Redact emails and keys.
       render: shell

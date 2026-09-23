@@ -10,7 +10,7 @@ treating a maintainer's time as something you have bought.
 
 Issues and pull requests that break this get closed. Accounts that keep at it
 get blocked. Report anything that needs attention to the maintainer through
-[a private security advisory](https://github.com/nchemb/bookkit/security/advisories/new),
+[a private security advisory](https://github.com/nchemb/opencalendar/security/advisories/new),
 which is the only private channel this repo has.
 
 That is the whole policy.

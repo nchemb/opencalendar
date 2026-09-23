@@ -1,4 +1,4 @@
-# BookKit v2 — Requirements
+# OpenCalendar v2 — Requirements
 
 Open-source, self-hosted Calendly replacement. One deploy = one host (you), any number of
 booking links, any number of brands/sites. Drop a script tag on any site or put the link in
@@ -124,7 +124,7 @@ product cannot have. Every section below is subordinate to section R.
 - D7 P0 Success screen: date/time in invitee tz, location/Meet link, add-to-calendar (Google,
   Outlook, .ics), reschedule/cancel links.
 - D8 P0 Branding per brand: name, logo/avatar, accent color, light/dark/auto theme; "Powered by
-  BookKit" optional.
+  OpenCalendar" optional.
 - D9 P1 Brand profile page listing its public event types (link-in-bio target).
 - D10 P1 `hide_details=1` / `hide_gdpr_banner` style embed params; `theme=dark|light`,
   `accent=` override for embeds.
@@ -246,7 +246,7 @@ product cannot have. Every section below is subordinate to section R.
   (free, 30 min, rolling 7 days, Meet, same question) on alphaflow; `general-meeting-neej`
   (free, secret, 60 days) on buildwithneej. Schedule Mon–Fri 09:30–16:00 America/Chicago, 30-min
   increments.
-- M2 buildwithneej.com and goalphaflow.com swap every Calendly link/embed for BookKit, locally,
+- M2 buildwithneej.com and goalphaflow.com swap every Calendly link/embed for OpenCalendar, locally,
   on branches — no prod push without explicit owner approval.
-- M3 Parallel soak: Calendly stays live until BookKit has taken real bookings on both sites for
+- M3 Parallel soak: Calendly stays live until OpenCalendar has taken real bookings on both sites for
   a week with zero incidents; then cancel Calendly.

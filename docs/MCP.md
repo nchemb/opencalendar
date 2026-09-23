@@ -1,6 +1,6 @@
 # MCP — let an AI agent book you
 
-BookKit exposes an [MCP](https://modelcontextprotocol.io) server at `/api/mcp`
+OpenCalendar exposes an [MCP](https://modelcontextprotocol.io) server at `/api/mcp`
 so Claude, ChatGPT, or any MCP-capable agent can check your availability and
 book, cancel or reschedule meetings on your behalf.
 
