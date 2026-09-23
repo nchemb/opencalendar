@@ -234,7 +234,18 @@ export type BookingInput = {
   utm?: Record<string, string> | null;
   /** Token of a single-use link this booking consumes. */
   singleUseToken?: string | null;
+  /** Set only by the public agent endpoint: tags the booking and applies the per-email cap. */
+  agent?: { client?: string | null } | null;
 };
+
+/** An invitee may hold at most one upcoming agent-made booking per event type. */
+export class AgentLimitError extends Error {
+  code = "AGENT_LIMIT";
+  constructor(message = "This email already has an upcoming booking for this meeting made by an agent. Use its manage link to change it.") {
+    super(message);
+    this.name = "AgentLimitError";
+  }
+}
 
 /** Price for a booking of `durationMinutes`, honouring a single-use link override. */
 export function priceFor(
@@ -301,6 +312,15 @@ function resolveLocation(mt: MeetingType, chosen: LocationOption | null | undefi
   throw new InvalidSlotError("That meeting location is not offered.");
 }
 
+function utmFor(input: BookingInput): Record<string, string> | undefined {
+  const utm = { ...(input.utm ?? {}) };
+  if (input.agent) {
+    utm.ref = "agent";
+    if (input.agent.client) utm.agent_client = input.agent.client;
+  }
+  return Object.keys(utm).length ? utm : undefined;
+}
+
 /**
  * Atomically claim a slot. Validates grid legality, DB overlaps (including live
  * holds), limits and live calendar freebusy, then inserts — all under the host lock.
@@ -342,6 +362,19 @@ async function reserveSlot(
       const limit = await limitReachedInTx(tx, mt, host, startTime, now);
       if (limit) throw new SlotTakenError(limit);
 
+      if (input.agent) {
+        const existing = await tx.booking.findFirst({
+          where: {
+            meetingTypeId: mt.id,
+            email: input.email,
+            endTime: { gt: now },
+            utm: { path: ["ref"], equals: "agent" },
+            OR: liveBookingStatusFilter(now),
+          },
+        });
+        if (existing) throw new AgentLimitError();
+      }
+
       // Live re-check against the real calendar, inside the lock: catches events the
       // host added by hand since the page was rendered.
       const busy = await calendar().freeBusy(host, guardStart, guardEnd);
@@ -368,7 +401,7 @@ async function reserveSlot(
           answers: input.answers?.length ? input.answers : undefined,
           guests,
           location: location as Prisma.InputJsonValue,
-          utm: input.utm && Object.keys(input.utm).length ? input.utm : undefined,
+          utm: utmFor(input),
           singleUseLinkId: link?.id ?? null,
           startTime,
           endTime,

@@ -1,8 +1,65 @@
 # MCP — let an AI agent book you
 
-OpenCalendar exposes an [MCP](https://modelcontextprotocol.io) server at `/api/mcp`
-so Claude, ChatGPT, or any MCP-capable agent can check your availability and
-book, cancel or reschedule meetings on your behalf.
+OpenCalendar runs two [MCP](https://modelcontextprotocol.io) servers:
+
+- **Public, no key** — `/api/mcp/public`. Any agent (someone's assistant that found
+  your site) can list the event types you opted in, find open times and book you.
+- **Keyed** — `/api/mcp`. Your own agent, with your API key: everything above plus
+  cancel, reschedule and list your upcoming bookings.
+
+## Public endpoint (any agent, no key)
+
+Turn on **"AI agents can book this"** on each event type agents may book
+(Admin → Event types). It is off by default, and secret types are never exposed
+even with it on.
+
+| Tool | What it does |
+|---|---|
+| `list_event_types` | The opted-in types: slug, name, durations, price, description, timezone, questions. |
+| `find_available_times` | Open slots for one type in a date range — the booking page's availability code. |
+| `book_meeting` | Free type: books it for the named invitee, who gets the normal confirmation email and calendar invite. Paid type: books nothing and returns `checkoutUrl`, the booking page with the slot preselected, for a person to pay. |
+
+`book_meeting` takes `slug`, `name`, `email`, `timezone`, `startTime`, and optionally
+`durationMinutes`, `answers`, `notes` and `agentName`. It runs through the same lock
+and live calendar re-check as a human booking, so two agents (or an agent and a
+person) can never land on one slot — the loser gets a "just taken" error.
+
+Limits: 60 requests a minute and 5 booking attempts an hour per IP, and one
+upcoming agent-made booking per invitee email per event type. Agent bookings are
+tagged `ref=agent` (and `agent_client=<agentName>`) in the booking source, shown in
+admin and in your "New booking" email. The endpoint returns nothing a booking page
+doesn't already show: no other invitees, no host email, no secret types.
+
+### Discovery
+
+- `GET /llms.txt` — what you offer, the public MCP URL, and how booking works,
+  generated from the opted-in types. Every booking page links to it with
+  `<link rel="alternate" type="text/plain">`.
+- `GET /.well-known/mcp.json` — machine-readable descriptor pointing at the public endpoint.
+
+Point your own site's `llms.txt` at `https://your-instance.example.com/llms.txt` so
+agents reading your site find the booking server.
+
+### Connect
+
+Claude Code:
+
+```bash
+claude mcp add --transport http rivera-studio https://your-instance.example.com/api/mcp/public
+```
+
+Claude (claude.ai / Desktop) and ChatGPT: add a custom connector / remote MCP server
+with the URL `https://your-instance.example.com/api/mcp/public` and no authentication.
+
+Any Streamable HTTP client:
+
+```bash
+curl -X POST https://your-instance.example.com/api/mcp/public \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_event_types","arguments":{}}}'
+```
+
+## Keyed endpoint (your own agent)
 
 - **Transport:** Streamable HTTP, JSON responses only (no SSE stream — every
   call gets a single JSON reply).
@@ -10,7 +67,7 @@ book, cancel or reschedule meetings on your behalf.
 - **Auth:** the same API key as the REST API — `Authorization: Bearer bk_live_...`.
   Create one in `/admin/settings/api-keys`.
 
-## Tools
+### Tools
 
 | Tool | What it does |
 |---|---|
@@ -25,14 +82,14 @@ Every tool reuses the exact same validation and booking-engine code as the
 booking page and the REST API (`lib/booking.ts`, `lib/booking-request.ts`) — an
 agent can never book something the UI couldn't.
 
-## Claude Code
+### Claude Code
 
 ```bash
 claude mcp add --transport http bookkit https://your-instance.example.com/api/mcp \
   --header "Authorization: Bearer bk_live_..."
 ```
 
-## Claude Desktop
+### Claude Desktop
 
 Add to your MCP config (`claude_desktop_config.json` doesn't support remote
 HTTP servers directly yet — use a local proxy like `mcp-remote`):
@@ -54,7 +111,7 @@ HTTP servers directly yet — use a local proxy like `mcp-remote`):
 }
 ```
 
-## Generic MCP client
+### Generic MCP client
 
 Any client that speaks Streamable HTTP just needs the URL and the header:
 

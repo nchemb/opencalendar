@@ -68,6 +68,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: { t
     customAnswer: b.customAnswer,
     syncError: b.googleSyncError,
     noShow: b.noShow,
+    viaAgent: (b.utm as Record<string, string> | null)?.ref === "agent",
     needsAttention: attentionIds ? attentionIds.has(b.id) : false,
     createdAt: b.createdAt.toISOString(),
     meetingType: b.meetingType,

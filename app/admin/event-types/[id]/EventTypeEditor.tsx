@@ -39,6 +39,7 @@ export type EditableEventType = {
   reminderMinutes: number[];
   followUpMinutes: number | null;
   secret: boolean;
+  agentBookable: boolean;
   displayMode: "popup" | "inline";
   active: boolean;
 };
@@ -458,6 +459,10 @@ export default function EventTypeEditor({
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={form.secret} onChange={(e) => set("secret", e.target.checked)} />
           Secret (hidden from brand profile page, bookable by URL)
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={form.agentBookable} onChange={(e) => set("agentBookable", e.target.checked)} />
+          AI agents can book this (public MCP + /llms.txt; never applies to secret types)
         </label>
       </div>
 

@@ -10,6 +10,8 @@ export type BookingParams = {
   guests: string;
   duration: number | null;
   date: string | null;
+  /** Preselected slot (UTC ISO instant) — opens straight on the details step. Server re-validates on submit. */
+  time: string | null;
   month: string | null;
   link: string | null;
   tz: string | null;
@@ -60,6 +62,7 @@ export function parseBookingParams(
     guests: get("guests") ?? "",
     duration: duration && /^\d+$/.test(duration) ? Number(duration) : null,
     date: get("date") ?? null,
+    time: isInstant(get("time")) ? new Date(get("time")!).toISOString() : null,
     month: get("month") ?? null,
     link: get("link") ?? null,
     tz: get("tz") ?? null,
@@ -69,4 +72,8 @@ export function parseBookingParams(
     embedId: get("embed_id") ?? null,
     utm,
   };
+}
+
+function isInstant(v: string | undefined): boolean {
+  return Boolean(v && /^\d{4}-\d{2}-\d{2}T/.test(v) && !Number.isNaN(Date.parse(v)));
 }

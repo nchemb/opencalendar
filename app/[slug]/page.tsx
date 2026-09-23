@@ -5,7 +5,7 @@ import BookingWidget from "@/components/booking/BookingWidget";
 import { initialSlots } from "@/lib/ui/initial-slots";
 import { bumpMetric } from "@/lib/analytics";
 import { hostBookingBlocked } from "@/lib/booking";
-import { env } from "@/lib/env";
+import { appUrl, env } from "@/lib/env";
 import { findActiveMeetingType, toPublic } from "@/lib/meeting-types";
 import { isBotUserAgent } from "@/lib/ui/bot";
 import { parseBookingParams } from "@/lib/ui/params";
@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   return {
     title,
     description,
-    alternates: { canonical: `/${params.slug}` },
+    alternates: { canonical: `/${params.slug}`, types: { "text/plain": `${appUrl()}/llms.txt` } },
     openGraph: { title, description },
     twitter: { card: "summary_large_image", title, description },
   };

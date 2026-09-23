@@ -3,6 +3,7 @@
  * functions as the booking page and the REST API (lib/booking.ts,
  * lib/booking-request.ts) so an agent can never take a path the UI couldn't.
  */
+import type { Host } from "@prisma/client";
 import { DateTime } from "luxon";
 import { prisma } from "../db";
 import {
@@ -25,28 +26,31 @@ import { isValidTimezone } from "../validate";
 export type ToolContent = { type: "text"; text: string };
 export type ToolResult = { content: ToolContent[]; structuredContent?: unknown; isError?: boolean };
 
+export type ToolCtx = { ip?: string };
+
 export type Tool = {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
-  handler: (args: Record<string, unknown>) => Promise<ToolResult>;
+  handler: (args: Record<string, unknown>, ctx?: ToolCtx) => Promise<ToolResult>;
 };
 
-function text(s: string): ToolResult {
+export function text(s: string): ToolResult {
   return { content: [{ type: "text", text: s }] };
 }
 
-function errorResult(message: string): ToolResult {
+export function errorResult(message: string): ToolResult {
   return { content: [{ type: "text", text: message }], isError: true };
 }
 
-async function bookingErrorMessage(err: unknown): Promise<string> {
-  const { SlotTakenError, InvalidSlotError, BookingUnavailableError, ChangeNotAllowedError } = await import("../booking");
+export async function bookingErrorMessage(err: unknown): Promise<string> {
+  const { SlotTakenError, InvalidSlotError, BookingUnavailableError, ChangeNotAllowedError, AgentLimitError } = await import("../booking");
   if (
     err instanceof SlotTakenError ||
     err instanceof InvalidSlotError ||
     err instanceof BookingUnavailableError ||
-    err instanceof ChangeNotAllowedError
+    err instanceof ChangeNotAllowedError ||
+    err instanceof AgentLimitError
   ) {
     return err.message;
   }
@@ -65,6 +69,40 @@ function formatSlotsByDay(slots: Date[], tz: string, cap = 200): string {
   const lines = [...byDay.entries()].map(([day, times]) => `${day}: ${times.join(", ")}`);
   const more = slots.length > cap ? `\n(+${slots.length - cap} more — narrow the date range)` : "";
   return lines.join("\n") + more;
+}
+
+/** Open slots for one resolved event type — the booking page's availability code. */
+export async function findTimes(
+  found: { meetingType: MeetingTypeFull; host: Host },
+  args: Record<string, unknown>
+): Promise<ToolResult> {
+  const { meetingType, host } = found;
+  const tz = typeof args.timezone === "string" && isValidTimezone(args.timezone) ? args.timezone : meetingType.schedule?.timezone || host.timezone;
+
+  const fromDt = DateTime.fromISO(String(args.from ?? ""), { zone: tz });
+  const toDt = DateTime.fromISO(String(args.to ?? ""), { zone: tz });
+  if (!fromDt.isValid || !toDt.isValid) return errorResult("`from` and `to` must be dates like 2026-10-01.");
+  const rangeStart = fromDt.startOf("day").toUTC().toJSDate();
+  const rangeEnd = toDt.endOf("day").toUTC().toJSDate();
+  if (rangeEnd <= rangeStart || rangeEnd.getTime() - rangeStart.getTime() > 70 * 86_400_000) {
+    return errorResult("Date range must be positive and no more than 70 days.");
+  }
+
+  const paused = pausedMessage(host);
+  if (paused) return text(paused);
+  if (hostBookingBlocked(host)) return errorResult("Booking is temporarily unavailable (calendar disconnected).");
+
+  try {
+    const durationArg = typeof args.duration === "number" ? args.duration : undefined;
+    const duration = resolveDuration(meetingType, durationArg);
+    const slots = await getAvailability(host, meetingType, rangeStart, rangeEnd, { durationMinutes: duration });
+    return {
+      content: [{ type: "text", text: formatSlotsByDay(slots, tz) }],
+      structuredContent: { slots: slots.map((s) => s.toISOString()), timezone: tz, durationMinutes: duration },
+    };
+  } catch (err) {
+    return errorResult(await bookingErrorMessage(err));
+  }
 }
 
 export const TOOLS: Tool[] = [
@@ -112,33 +150,7 @@ export const TOOLS: Tool[] = [
       const slug = String(args.slug ?? "");
       const found = await findActiveMeetingType(slug);
       if (!found) return errorResult(`No event type with slug "${slug}". Call list_event_types first.`);
-      const { meetingType, host } = found;
-      const tz = typeof args.timezone === "string" && isValidTimezone(args.timezone) ? args.timezone : meetingType.schedule?.timezone || host.timezone;
-
-      const fromDt = DateTime.fromISO(String(args.from ?? ""), { zone: tz });
-      const toDt = DateTime.fromISO(String(args.to ?? ""), { zone: tz });
-      if (!fromDt.isValid || !toDt.isValid) return errorResult("`from` and `to` must be dates like 2026-10-01.");
-      const rangeStart = fromDt.startOf("day").toUTC().toJSDate();
-      const rangeEnd = toDt.endOf("day").toUTC().toJSDate();
-      if (rangeEnd <= rangeStart || rangeEnd.getTime() - rangeStart.getTime() > 70 * 86_400_000) {
-        return errorResult("Date range must be positive and no more than 70 days.");
-      }
-
-      const paused = pausedMessage(host);
-      if (paused) return text(paused);
-      if (hostBookingBlocked(host)) return errorResult("Booking is temporarily unavailable (calendar disconnected).");
-
-      try {
-        const durationArg = typeof args.duration === "number" ? args.duration : undefined;
-        const duration = resolveDuration(meetingType, durationArg);
-        const slots = await getAvailability(host, meetingType, rangeStart, rangeEnd, { durationMinutes: duration });
-        return {
-          content: [{ type: "text", text: formatSlotsByDay(slots, tz) }],
-          structuredContent: { slots: slots.map((s) => s.toISOString()), timezone: tz, durationMinutes: duration },
-        };
-      } catch (err) {
-        return errorResult(await bookingErrorMessage(err));
-      }
+      return findTimes(found, args);
     },
   },
   {

@@ -44,6 +44,7 @@ const BLANK: EditableEventType = {
   reminderMinutes: [1440, 60],
   followUpMinutes: null,
   secret: false,
+  agentBookable: false,
   displayMode: "popup",
   active: true,
 };
@@ -94,6 +95,7 @@ export default async function EventTypeEditorPage({ params }: { params: { id: st
         reminderMinutes: existing.reminderMinutes,
         followUpMinutes: existing.followUpMinutes,
         secret: existing.secret,
+        agentBookable: existing.agentBookable,
         displayMode: existing.displayMode,
         active: existing.active,
       }

@@ -194,7 +194,7 @@ export async function sendHostNotification(ctx: BookingCtx): Promise<boolean> {
     to: host.email,
     subject: `New booking: ${booking.name}, ${meetingType.name} (${DateTime.fromJSDate(booking.startTime, { zone: host.timezone }).toFormat("ccc LLL d, h:mm a")})`,
     html: emailShell(`
-      <h1 style="margin:0 0 18px;font-size:20px">New booking</h1>
+      <h1 style="margin:0 0 18px;font-size:20px">New booking${utm?.ref === "agent" ? " (booked by an AI agent)" : ""}</h1>
       ${detailsTable(ctx, host.timezone, true)}
       ${answersHtml(booking)}
       ${source ? `<p style="margin:0 0 12px;color:#71717a;font-size:13px">Source: ${escapeHtml(source)}</p>` : ""}

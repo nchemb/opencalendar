@@ -38,8 +38,11 @@ outbox, and anything that goes wrong shows up as an alert, not a log line.
   Swapping from Calendly can be a one-line change.
 - **Brands** — run several sites from one install, each with its own name, logo, colors and
   profile page.
-- **Webhooks, REST API and an MCP server** — so Zapier, your CRM, or an AI agent can read
-  your availability and book you.
+- **Webhooks, REST API and an MCP server** — so Zapier, your CRM, or your own AI agent can read
+  your availability and manage your bookings.
+- **Agent-bookable** — any AI agent can find you through `/llms.txt` and book the event types you
+  opt in over a public, keyless MCP endpoint. Free meetings book straight through the same
+  double-booking-safe path as a human; paid ones hand back a checkout link for a person to pay.
 - **Analytics** — views → time picked → booked, by source, plus revenue, cancellations and
   no-shows. No cookies, no trackers.
 - **Your data, your database.** No accounts, no vendor, no per-seat pricing. MIT licensed.

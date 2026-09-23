@@ -4,6 +4,28 @@ All notable changes are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] — 2026-09-23
+
+### Added
+
+- **Public agent booking.** A keyless MCP endpoint at `/api/mcp/public` with `list_event_types`,
+  `find_available_times` and `book_meeting`, limited to event types with the new **"AI agents can
+  book this"** switch (off by default; secret types are never exposed). Free bookings run through
+  the same lock and live calendar re-check as the booking page and send the same emails and
+  invite. Paid types book nothing and return a checkout URL with the slot preselected.
+- Abuse limits on the public endpoint: per-IP request and booking rate limits, and one upcoming
+  agent-made booking per invitee email per event type.
+- Agent bookings are tagged `ref=agent` (plus the agent's reported name) in the booking source,
+  shown in admin and in the host's "New booking" email.
+- Discovery: `/llms.txt` and `/.well-known/mcp.json`, generated from the agent-bookable types;
+  booking pages link to `/llms.txt`.
+- Booking page `time` URL param: preselects a slot and opens straight on the details step.
+
+### Upgrading
+
+Run `npm run db:deploy` (adds `MeetingType.agentBookable`), then turn the switch on for the event
+types agents may book.
+
 ## [2.0.0] — 2026-09-22
 
 Renamed from BookKit to **OpenCalendar**; the embed API, events, webhook header and env var

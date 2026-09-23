@@ -79,6 +79,7 @@ export type MeetingTypeFields = {
   reminderMinutes: number[];
   followUpMinutes: number | null;
   secret: boolean;
+  agentBookable: boolean;
   displayMode: "popup" | "inline";
   active: boolean;
 };
@@ -193,6 +194,7 @@ export function parseMeetingTypeInput(body: Record<string, unknown>): MeetingTyp
     reminderMinutes: parseReminderMinutes(body.reminderMinutes ?? [1440, 60]),
     followUpMinutes: optionalInt(body.followUpMinutes, 5, 30 * 24 * 60),
     secret: bool(body.secret, false),
+    agentBookable: bool(body.agentBookable, false),
     displayMode: body.displayMode === "inline" ? "inline" : "popup",
     active: body.active !== false,
   };

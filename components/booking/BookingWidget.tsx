@@ -40,12 +40,12 @@ export default function BookingWidget({
   params,
   initialSlots = null,
 }: Props) {
-  const [step, setStep] = useState<Step>("calendar");
+  const [step, setStep] = useState<Step>(params.time ? "details" : "calendar");
   const [durationMinutes, setDurationMinutes] = useState(
     params.duration && mt.durations.some((d) => d.minutes === params.duration) ? params.duration : mt.durationMinutes
   );
-  const [timezone, setTimezone] = useState(mt.hostTimezone);
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [timezone, setTimezone] = useState(() => (params.time && params.tz && isValidZone(params.tz) ? params.tz : mt.hostTimezone));
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(params.time);
   const [form, setForm] = useState<FormState>({
     name: params.name,
     email: params.email,
@@ -354,4 +354,8 @@ function BackIcon() {
       <path d="m15 18-6-6 6-6" />
     </svg>
   );
+}
+
+function isValidZone(tz: string): boolean {
+  return DateTime.local().setZone(tz).isValid;
 }

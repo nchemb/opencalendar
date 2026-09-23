@@ -162,6 +162,8 @@ model MeetingType {
   followUpMinutes Int? // send follow-up this long after the end; null = off
 
   secret      Boolean     @default(false)
+  // Listed on the keyless public MCP endpoint + /llms.txt so any AI agent can book it.
+  agentBookable Boolean   @default(false)
   displayMode DisplayMode @default(popup)
   active      Boolean     @default(true)
   position    Int         @default(0)

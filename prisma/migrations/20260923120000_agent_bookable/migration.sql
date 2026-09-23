@@ -1,0 +1,1 @@
+ALTER TABLE "MeetingType" ADD COLUMN "agentBookable" BOOLEAN NOT NULL DEFAULT false;

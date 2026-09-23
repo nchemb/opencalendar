@@ -19,6 +19,7 @@ export type AdminBooking = {
   customAnswer: string | null;
   syncError: string | null;
   noShow: boolean;
+  viaAgent: boolean;
   needsAttention: boolean;
   createdAt: string;
   meetingType: { name: string; color: string; slug: string };
@@ -67,7 +68,10 @@ export default function BookingsTable({ bookings, hostTimezone }: { bookings: Ad
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: b.meetingType.color }} />
               <span className="font-medium tabular-nums">{start.toFormat("ccc LLL d, h:mm a")}</span>
               <span className="text-sm text-[var(--bk-muted)]">{b.meetingType.name}</span>
-              <span className="text-sm">{b.name}</span>
+              <span className="text-sm">
+                {b.name}
+                {b.viaAgent && <span className="ml-1.5 text-xs text-[var(--bk-muted)]">· via AI agent</span>}
+              </span>
               <span className="text-sm text-[var(--bk-muted)]">{b.email}</span>
               {b.amountCents ? (
                 <span className="text-sm text-[var(--bk-muted)]">

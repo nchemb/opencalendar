@@ -14,6 +14,7 @@ iframe. This file is the contract between them. Both sides must follow it exactl
 | `guests` | Comma-separated guest emails. |
 | `duration` | Preselect a duration (minutes) when the type offers several. |
 | `date` | Preselect a day, `yyyy-MM-dd`. |
+| `time` | Preselect a slot (UTC ISO instant) and open on the details step. Re-validated on submit; pair with `tz`. |
 | `month` | Open the calendar on a month, `yyyy-MM`. |
 | `link` | Single-use link token (one-off link). |
 | `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`, `ref`, `src` | Stored on the booking. |
