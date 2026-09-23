@@ -25,3 +25,7 @@ coverage
 test-results
 playwright-report
 .playwright
+
+# Internal planning notes (local only)
+.planning/
+session-log.md
