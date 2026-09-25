@@ -3,9 +3,14 @@
 [![CI](https://github.com/nchemb/opencalendar/actions/workflows/ci.yml/badge.svg)](https://github.com/nchemb/opencalendar/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**The open-source Calendly alternative.** Self-hosted: one Next.js app that reads your real
-Google Calendar, takes bookings from any website or social bio, charges with Stripe when
-you want it to, and never loses or double-books a meeting.
+**The open-source Calendly alternative that AI agents can book.** Self-hosted: one Next.js
+app that reads your real Google Calendar, takes bookings from any website or social bio,
+charges with Stripe when you want it to, and never loses or double-books a meeting.
+
+Any AI agent that finds your site can book you. OpenCalendar publishes `/llms.txt` and a
+public, keyless MCP server, so an assistant like Claude or ChatGPT can see what you offer, check
+your real availability and book a free call for the person it works for. For a paid meeting the
+agent gets a checkout link with the time already picked, and a human pays.
 
 <p align="center">
   <img src="docs/screenshots/readme/booking-page.png" alt="A paid booking page on OpenCalendar" width="820">
@@ -19,6 +24,9 @@ outbox, and anything that goes wrong shows up as an alert, not a log line.
 
 ## What you get
 
+- **Agent-bookable** — any AI agent can find you through `/llms.txt` and book the event types you
+  opt in over a public, keyless MCP endpoint. Free meetings book straight through the same
+  double-booking-safe path as a human; paid ones hand back a checkout link for a person to pay.
 - **Booking links** — free or paid, one or several durations, Google Meet / Zoom link /
   phone / in-person / custom locations, up to 10 questions of six types, guests,
   single-use links, secret links.
@@ -40,12 +48,27 @@ outbox, and anything that goes wrong shows up as an alert, not a log line.
   profile page.
 - **Webhooks, REST API and an MCP server** — so Zapier, your CRM, or your own AI agent can read
   your availability and manage your bookings.
-- **Agent-bookable** — any AI agent can find you through `/llms.txt` and book the event types you
-  opt in over a public, keyless MCP endpoint. Free meetings book straight through the same
-  double-booking-safe path as a human; paid ones hand back a checkout link for a person to pay.
 - **Analytics** — views → time picked → booked, by source, plus revenue, cancellations and
   no-shows. No cookies, no trackers.
 - **Your data, your database.** No accounts, no vendor, no per-seat pricing. MIT licensed.
+
+## Let AI agents book you
+
+1. Tick **"AI agents can book this"** on the event types agents may book (off by default;
+   secret types are never exposed).
+2. That's it. Agents discover you at `https://your-instance.example.com/llms.txt` and
+   `/.well-known/mcp.json`, and connect to `https://your-instance.example.com/api/mcp/public`
+   with no API key.
+
+```bash
+claude mcp add --transport http rivera-studio https://your-instance.example.com/api/mcp/public
+# then: "book me a 30 minute intro with Rivera Studio next Tuesday afternoon"
+```
+
+Agent bookings go through the same lock and live calendar check as a human booking, send the
+same confirmation email and invite, are rate limited per IP and capped at one upcoming booking
+per email, and show up in admin tagged "via AI agent". Point your own site's `llms.txt` at your
+instance's so agents reading your site find it. Details: [docs/MCP.md](docs/MCP.md).
 
 ## Screenshots
 
