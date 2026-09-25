@@ -101,6 +101,8 @@ export async function resetDemoData(): Promise<{ host: string; meetingTypes: num
       questions: (type.questions ?? undefined) as object | undefined,
       displayMode: type.displayMode,
       active: true,
+      // The demo shows off agent booking: any MCP client can book these (paid returns a checkout link).
+      agentBookable: true,
     };
 
     await prisma.meetingType.upsert({
