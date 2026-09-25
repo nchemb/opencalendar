@@ -3,6 +3,8 @@
 [![CI](https://github.com/nchemb/opencalendar/actions/workflows/ci.yml/badge.svg)](https://github.com/nchemb/opencalendar/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+**[Try the live demo →](https://opencalendar-demo.vercel.app/intro-call)** (fake calendar, resets daily) · [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fnchemb%2Fopencalendar&project-name=opencalendar&env=DATABASE_URL%2CDIRECT_URL%2CADMIN_PASSWORD%2CCRON_SECRET%2CGOOGLE_CLIENT_ID%2CGOOGLE_CLIENT_SECRET&envDescription=Postgres+URLs+%28pooled+%2B+direct%29%2C+an+admin+password%2C+a+cron+secret%2C+and+a+Google+OAuth+client.+Everything+else+is+optional.&envLink=https%3A%2F%2Fgithub.com%2Fnchemb%2Fopencalendar%23self-host-in-20-minutes)
+
 **The open-source Calendly alternative that AI agents can book.** Self-hosted: one Next.js
 app that reads your real Google Calendar, takes bookings from any website or social bio,
 charges with Stripe when you want it to, and never loses or double-books a meeting.
@@ -13,7 +15,7 @@ your real availability and book a free call for the person it works for. For a p
 agent gets a checkout link with the time already picked, and a human pays.
 
 <p align="center">
-  <img src="docs/screenshots/readme/booking-page.png" alt="A paid booking page on OpenCalendar" width="820">
+  <img src="docs/screenshots/readme/booking-flow.gif" alt="Booking a meeting on the OpenCalendar demo: pick a day, pick a time, enter details, booked" width="800">
 </p>
 
 
@@ -64,6 +66,10 @@ outbox, and anything that goes wrong shows up as an alert, not a log line.
 claude mcp add --transport http rivera-studio https://your-instance.example.com/api/mcp/public
 # then: "book me a 30 minute intro with Rivera Studio next Tuesday afternoon"
 ```
+
+Try it against the demo right now, no install: point any MCP client at
+`https://opencalendar-demo.vercel.app/api/mcp/public`, or read what an agent sees at
+[opencalendar-demo.vercel.app/llms.txt](https://opencalendar-demo.vercel.app/llms.txt).
 
 Agent bookings go through the same lock and live calendar check as a human booking, send the
 same confirmation email and invite, are rate limited per IP and capped at one upcoming booking
@@ -128,7 +134,8 @@ Open `http://localhost:3000/admin` (the password is in `.env`), then:
    [docs/RELIABILITY.md](docs/RELIABILITY.md) for GitHub Actions, cron and uptime-monitor
    options.
 
-**Deploy:** push to GitHub, import into Vercel, copy every variable from `.env` (watch for
+**Deploy:** use the **Deploy with Vercel** button at the top (it asks for the required variables;
+migrations run on every Vercel production build), or push to GitHub, import into Vercel, copy every variable from `.env` (watch for
 trailing whitespace in pasted secrets, a classic silent-401), set `NEXT_PUBLIC_APP_URL` and
 `GOOGLE_REDIRECT_URI` to your domain, and reconnect Google once from the deployed admin.
 Use a Postgres that never pauses: a free database that sleeps after a week idle will take

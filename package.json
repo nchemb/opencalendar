@@ -26,7 +26,8 @@
     "screenshots": "SCREENSHOTS=1 playwright test --project=screenshots",
     "test:all": "npm run typecheck && npm run test && npm run test:e2e",
     "db:up": "docker compose up -d --wait",
-    "setup": "tsx scripts/setup.ts"
+    "setup": "tsx scripts/setup.ts",
+    "vercel-build": "prisma generate && if [ \"$VERCEL_ENV\" = production ]; then prisma migrate deploy; fi && next build"
   },
   "dependencies": {
     "@prisma/client": "^6.19.2",
